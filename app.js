@@ -1,0 +1,524 @@
+// ADE 2026 over the Amsterdam building model. Tiles, packs and the tile worker come from
+// "Amsterdam, building by building" by Alex Barakov (MIT); the shading is a night version of its maquette shader.
+import * as THREE from './vendor/three.module.js';
+import { MapControls } from './vendor/MapControls.js';
+
+const ROOT = document.documentElement;
+const FMT = ROOT.dataset.fmt || 'b64';            // 'gz' on GitHub Pages, 'b64' inside the artifact viewer
+const GUIDE = ROOT.dataset.guide || '';
+const SKY = '#0B0D12', LAND = '#12151C', WATER = '#0A1722';
+const FREE = new THREE.Color('#FFCB4D'), PAID = new THREE.Color('#5EC8F2');
+const DAYN = ['Wed 21', 'Thu 22', 'Fri 23', 'Sat 24', 'Sun 25'];
+const DAYL = ['Wednesday 21', 'Thursday 22', 'Friday 23', 'Saturday 24', 'Sunday 25'];
+const KINDC = { day: '#EF8055', club: '#B78CEE', art: '#78A8F2', talk: '#DFA63E', well: '#41C0A0' };
+const KINDL = { day: 'Day music', club: 'Club', art: 'Art & film', talk: 'Talk', well: 'Wellbeing' };
+const ADE = 'https://www.amsterdam-dance-event.nl/en/program/2026/';
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const hm = m => m < 0 ? '' : String(Math.floor(m / 60) % 24).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+const fold = s => s.toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '');
+const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
+const coarse = matchMedia('(pointer: coarse)').matches;
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const mobile = () => innerWidth <= 820;
+const $ = id => document.getElementById(id);
+
+// Amsterdam clock: which ADE day it is now, counting until 05:00 as the night before.
+function amsNow() {
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Amsterdam', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+    .formatToParts(new Date()).map(x => [x.type, x.value]));
+  let day = +p.day - 21, min = +p.hour * 60 + +p.minute;
+  if (p.year !== '2026' || p.month !== '10') day = -9;
+  if (min < 300) { day -= 1; min += 1440; }
+  return { day, min, live: day >= 0 && day <= 4 };
+}
+
+function fail(msg) {
+  $('loading').hidden = false;
+  $('loading').innerHTML = `<div class="err"><b>The 3D map could not start.</b><p>${esc(msg)}</p>${GUIDE ? `<p><a href="${GUIDE}">Open the list guide instead</a></p>` : ''}</div>`;
+}
+
+async function bin(name) {
+  if (FMT === 'gz') {
+    const r = await fetch(`data/${name}.gz`);
+    if (!r.ok) throw new Error(`${name} did not load (${r.status})`);
+    return new Response(r.body.pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
+  }
+  const r = await fetch(`data/${name.replace(/\.bin$/, '')}.gz.txt`);
+  if (!r.ok) throw new Error(`${name} did not load (${r.status})`);
+  const s = atob((await r.text()).trim()), raw = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) raw[i] = s.charCodeAt(i);
+  return new Response(new Blob([raw]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
+}
+
+try { await main(); } catch (e) { console.error(e); fail(e.message || String(e)); }
+
+async function main() {
+  const canvas = $('scene');
+  if (!canvas.getContext('webgl2')) throw new Error('This browser or device has WebGL 2 switched off. Try a recent Chrome, Safari or Firefox.');
+  const [city, ade] = await Promise.all([fetch('data/city.json').then(r => r.json()), fetch('data/ade.json').then(r => r.json())]);
+  const V = ade.venues;
+  V.forEach(v => { v.s = fold(v.n + ' ' + v.vn.join(' ') + ' ' + v.a + ' ' + (v.d || '')); });
+  const TOTAL = V.reduce((s, v) => s + v.ev.length, 0);
+
+  // ---------- scene ----------
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: !coarse });
+  renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
+  renderer.setPixelRatio(Math.min(devicePixelRatio, coarse ? 1.5 : 2));
+  renderer.setClearColor(SKY);
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(35, 1, 5, 60000);
+  const controls = new MapControls(camera, canvas);
+  controls.enableDamping = true;
+  controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
+  controls.rotateSpeed = 0.6;
+  controls.maxPolarAngle = Math.PI * 0.47;
+  controls.minDistance = 60;
+  controls.maxDistance = 30000;
+  let dirty = true, busyUntil = 0;
+  const wake = (sec = 0) => { dirty = true; busyUntil = Math.max(busyUntil, performance.now() + sec * 1000); };
+  controls.addEventListener('change', () => wake());
+  const az = THREE.MathUtils.degToRad(200), el = THREE.MathUtils.degToRad(46), dist = mobile() ? 5200 : 4300;
+  controls.target.set(0, 0, 250);
+  camera.position.set(dist * Math.cos(el) * Math.sin(az), dist * Math.sin(el), 250 + dist * Math.cos(el) * Math.cos(az));
+  controls.update();
+
+  async function loadPolygons(name) {
+    const buf = await bin(name);
+    const [nPoly, nRing, nVert] = new Uint32Array(buf, 0, 3);
+    const ringStart = new Uint32Array(buf, 12, nPoly + 1);
+    const vertStart = new Uint32Array(buf, 12 + 4 * (nPoly + 1), nRing + 1);
+    const xz = new Float32Array(buf, 12 + 4 * (nPoly + 1) + 4 * (nRing + 1), 2 * nVert);
+    const ring = r => { const p = []; for (let v = vertStart[r]; v < vertStart[r + 1]; v++) p.push(new THREE.Vector2(xz[2 * v], -xz[2 * v + 1])); return p; };
+    const shapes = [];
+    for (let p = 0; p < nPoly; p++) {
+      const s = new THREE.Shape(ring(ringStart[p]));
+      for (let r = ringStart[p] + 1; r < ringStart[p + 1]; r++) s.holes.push(new THREE.Path(ring(r)));
+      shapes.push(s);
+    }
+    const g = new THREE.ShapeGeometry(shapes);
+    g.rotateX(-Math.PI / 2);
+    return g;
+  }
+  const [landGeo, waterGeo] = await Promise.all([loadPolygons('land.bin'), loadPolygons('water.bin')]);
+  const land = new THREE.Mesh(landGeo, new THREE.MeshBasicMaterial({ color: LAND }));
+  const water = new THREE.Mesh(waterGeo, new THREE.MeshBasicMaterial({ color: WATER }));
+  land.position.y = -0.05; water.position.y = -0.4;
+  scene.add(land, water);
+
+  // Buildings: flat-shaded from screen derivatives, warm glow near free venues, venue buildings lit window by window.
+  const MAXV = 48;
+  const uniforms = {
+    uFogColor: { value: new THREE.Color(SKY) }, uFog: { value: new THREE.Vector2(7000, 24000) },
+    uLit: { value: Array.from({ length: MAXV }, () => new THREE.Vector3(0, 0, -1)) }, uLitN: { value: 0 },
+    uNow: { value: 0 }, uV: { value: null }, uSel: { value: -1 }, uMode: { value: 0 }, uGlow: { value: 0.25 },
+  };
+  const VW = 512, vData = new Float32Array(VW * 4);
+  const vTex = new THREE.DataTexture(vData, VW, 1, THREE.RGBAFormat, THREE.FloatType);
+  vTex.needsUpdate = true;
+  uniforms.uV.value = vTex;
+  const VERT = `
+    in float vid; uniform float uBorn; uniform float uNow; out vec3 vWorld; out float vVid;
+    void main() {
+      vVid = vid;
+      vec3 p = position;
+      float k = clamp((uNow - uBorn) / 0.8, 0.0, 1.0);
+      p.y *= k * k * (3.0 - 2.0 * k);
+      vec4 w = modelMatrix * vec4(p, 1.0); vWorld = w.xyz;
+      gl_Position = projectionMatrix * viewMatrix * w;
+    }`;
+  const FRAG = `
+    precision highp float;
+    uniform vec3 uFogColor; uniform vec2 uFog; uniform vec3 uLit[${MAXV}]; uniform int uLitN;
+    uniform sampler2D uV; uniform float uSel; uniform int uMode; uniform float uGlow;
+    in vec3 vWorld; in float vVid; out vec4 outColor;
+    void main() {
+      vec3 n = normalize(cross(dFdx(vWorld), dFdy(vWorld)));
+      float moon = max(dot(n, normalize(vec3(0.45, 0.6, -0.55))), 0.0);
+      vec3 c = n.y > 0.9 ? vec3(0.20, 0.215, 0.25) : vec3(0.11, 0.12, 0.145) + 0.07 * moon;
+      c *= mix(0.7, 1.0, clamp(vWorld.y / 14.0, 0.0, 1.0));
+      float glow = 0.0;
+      for (int i = 0; i < ${MAXV}; i++) {
+        if (i >= uLitN) break;
+        vec2 dv = vWorld.xz - uLit[i].xy;
+        glow += uLit[i].z * exp(-dot(dv, dv) / 9000.0);
+      }
+      c += vec3(1.0, 0.72, 0.28) * min(glow, 1.0) * uGlow;
+      if (vVid > -0.5) {
+        vec4 vc = texelFetch(uV, ivec2(int(vVid + 0.5), 0), 0);
+        float sel = abs(vVid - uSel) < 0.5 ? 1.0 : 0.0;
+        if (vc.a > 0.0 && (uMode == 0 || sel > 0.5)) {
+          vec3 lc;
+          if (n.y > 0.9) lc = vc.rgb * 1.15;
+          else {
+            float band = step(0.42, fract(vWorld.y / 3.2));
+            float colm = step(0.4, fract((vWorld.x + vWorld.z) / 2.4));
+            lc = vc.rgb * (0.35 + 1.35 * band * colm);
+          }
+          c = mix(c, lc * (1.0 + 0.6 * sel), clamp(vc.a + sel, 0.0, 1.0));
+        }
+      }
+      float d = length(vWorld - cameraPosition);
+      c = mix(c, uFogColor, smoothstep(uFog.x, uFog.y, d));
+      outColor = vec4(c, 1.0);
+    }`;
+  const material = born => new THREE.ShaderMaterial({ glslVersion: THREE.GLSL3, uniforms: { ...uniforms, uBorn: born }, vertexShader: VERT, fragmentShader: FRAG, side: THREE.DoubleSide });
+
+  // ---------- state ----------
+  const S = {
+    view: store.get('adem-view') || 'heat', free: store.get('adem-free') === '1', slot: store.get('adem-slot') || 'all',
+    day: +(store.get('adem-day') ?? 0), sel: -1, q: [], qText: '',
+  };
+  const NOW = amsNow();
+  if (NOW.live && !store.get('adem-day-set')) S.day = NOW.day;
+  if (!(S.day >= 0 && S.day < 5)) S.day = 0;
+  const VIEWS = [['heat', 'Heat glow'], ['lit', 'Lit buildings'], ['beams', 'Beams']];
+  const SLOTS = [['all', 'All day'], ...(NOW.live ? [['now', 'Now']] : []), ['morning', 'Morning'], ['afternoon', 'Afternoon'], ['evening', 'Evening'], ['night', 'Night']];
+  if (!VIEWS.some(v => v[0] === S.view)) S.view = 'heat';
+  if (!SLOTS.some(v => v[0] === S.slot)) S.slot = 'all';
+  readHash();
+
+  const endMin = e => { if (!e[2]) return e[1] + 120; let m = +e[2].slice(0, 2) * 60 + +e[2].slice(3, 5); if (e[2] === '23:59') m = 1440; while (m <= e[1]) m += 1440; return m; };
+  const inSlot = e => {
+    const m = e[1], s = S.slot;
+    if (s === 'all') return true;
+    if (s === 'now') { const t = amsNow(); return e[0] === t.day && m <= t.min && t.min < endMin(e); }
+    if (s === 'morning') return m < 720;
+    if (s === 'afternoon') return m >= 720 && m < 1020;
+    if (s === 'evening') return m >= 1020 && m < 1320;
+    return m >= 1320;
+  };
+  const qMatch = (v, e) => !S.q.length || S.q.every(w => e[9].includes(w) || v.s.includes(w));
+  const evFor = v => v.ev.filter(e => e[0] === S.day && inSlot(e) && (!S.free || e[3]) && qMatch(v, e));
+
+  // ---------- venue markers ----------
+  const beamGeo = new THREE.CylinderGeometry(1, 1, 1, 14, 1, true); beamGeo.translate(0, 0.5, 0);
+  const coreGeo = new THREE.CylinderGeometry(1, 1, 1, 8, 1, false); coreGeo.translate(0, 0.5, 0);
+  const discGeo = new THREE.CircleGeometry(1, 40); discGeo.rotateX(-Math.PI / 2);
+  const hitGeo = new THREE.CylinderGeometry(1, 1, 1, 6); hitGeo.translate(0, 0.5, 0);
+  const hitMat = new THREE.MeshBasicMaterial({ visible: false });
+  const poolTex = (() => {
+    const c = document.createElement('canvas'); c.width = c.height = 128;
+    const x = c.getContext('2d'), gr = x.createRadialGradient(64, 64, 0, 64, 64, 64);
+    gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.35, 'rgba(255,255,255,.45)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+    x.fillStyle = gr; x.fillRect(0, 0, 128, 128);
+    return new THREE.CanvasTexture(c);
+  })();
+  const add = { transparent: true, blending: THREE.AdditiveBlending, depthWrite: false };
+  const markers = new THREE.Group(); scene.add(markers);
+  const hits = [];
+  V.forEach((v, i) => {
+    const g = new THREE.Group(); g.position.set(v.x, 0, v.z);
+    const halo = new THREE.Mesh(beamGeo, new THREE.MeshBasicMaterial({ ...add, opacity: 0.16, side: THREE.DoubleSide }));
+    const core = new THREE.Mesh(coreGeo, new THREE.MeshBasicMaterial({ ...add, opacity: 0.95 }));
+    const disc = new THREE.Mesh(discGeo, new THREE.MeshBasicMaterial({ ...add, map: poolTex, opacity: 0.5 }));
+    disc.position.y = 0.3;
+    const hit = new THREE.Mesh(hitGeo, hitMat); hit.userData.i = i;
+    g.add(halo, core, disc, hit);
+    g.userData = { halo, core, disc, hit };
+    markers.add(g); hits.push(hit); v.g = g;
+  });
+
+  function refreshScene() {
+    const lit = [], view = S.view, beams = view === 'beams';
+    uniforms.uMode.value = view === 'lit' ? 0 : view === 'heat' ? 1 : 2;
+    uniforms.uGlow.value = view === 'heat' ? 0.55 : view === 'lit' ? 0.3 : 0.35;
+    uniforms.uSel.value = S.sel;
+    V.forEach((v, i) => {
+      const e = evFor(v), u = v.g.userData;
+      v.c = e.length; v.nf = e.filter(x => x[3]).length;
+      v.g.visible = v.c > 0;
+      const c = v.nf ? FREE : PAID;
+      vData.set(v.c ? [c.r * 1.6, c.g * 1.6, c.b * 1.6, Math.min(0.6 + 0.1 * v.c, 1)] : [0, 0, 0, 0], i * 4);
+      if (!v.c) return;
+      const h = Math.min(70 + 45 * v.c, 520), sel = i === S.sel;
+      u.halo.visible = u.core.visible = beams;
+      u.halo.material.color.copy(c); u.core.material.color.copy(c); u.disc.material.color.copy(c);
+      u.halo.scale.set(sel ? 34 : 18, h, sel ? 34 : 18);
+      u.core.scale.set(sel ? 5 : 3, h, sel ? 5 : 3);
+      const pool = view === 'heat' ? Math.min(110 + 35 * v.c, 320) : view === 'lit' ? Math.min(Math.max((v.bw || 25) * 3, 75) + 12 * v.c, 180) : 46;
+      u.disc.scale.setScalar(pool * (sel ? 1.5 : 1));
+      u.disc.material.opacity = view === 'heat' ? 0.55 + 0.05 * Math.min(v.c, 6) : view === 'lit' ? 0.5 : 0.3;
+      const r = beams ? 40 : Math.max(v.bw || 25, 25);
+      u.hit.scale.set(r, beams ? h : Math.max(v.bh || 30, 30), r);
+      if (v.nf) lit.push([v.x, v.z, Math.min(0.35 + 0.12 * v.nf, 1)]);
+    });
+    vTex.needsUpdate = true;
+    lit.sort((a, b) => b[2] - a[2]);
+    uniforms.uLitN.value = Math.min(lit.length, MAXV);
+    lit.slice(0, MAXV).forEach((l, k) => uniforms.uLit.value[k].set(l[0], l[1], l[2]));
+    wake();
+  }
+  const refresh = () => { refreshScene(); panel(); writeHash(); };
+
+  // ---------- tiles, nearest first; each venue lights the smallest building box around its address ----------
+  const best = [];
+  function matchVenues(m, mesh) {
+    const nB = m.nB, ox = m.origin[0], oz = m.origin[1], pos = m.pos, bl = m.bld;
+    const bb = new Float32Array(nB * 5);
+    for (let b = 0; b < nB; b++) bb.set([Infinity, -Infinity, Infinity, -Infinity, 0], b * 5);
+    let tx0 = Infinity, tx1 = -Infinity, tz0 = Infinity, tz1 = -Infinity;
+    for (let v = 0; v < bl.length; v++) {
+      const b = bl[v] * 5, x = ox + pos[3 * v] * 0.1, y = pos[3 * v + 1] * 0.1, z = oz + pos[3 * v + 2] * 0.1;
+      if (x < bb[b]) bb[b] = x; if (x > bb[b + 1]) bb[b + 1] = x;
+      if (z < bb[b + 2]) bb[b + 2] = z; if (z > bb[b + 3]) bb[b + 3] = z;
+      if (y > bb[b + 4]) bb[b + 4] = y;
+      if (x < tx0) tx0 = x; if (x > tx1) tx1 = x; if (z < tz0) tz0 = z; if (z > tz1) tz1 = z;
+    }
+    const attr = mesh.geometry.getAttribute('vid');
+    let changed = false;
+    V.forEach((v, vi) => {
+      if (v.x < tx0 - 25 || v.x > tx1 + 25 || v.z < tz0 - 25 || v.z > tz1 + 25) return;
+      let win = -1, score = Infinity;
+      for (let b = 0; b < nB; b++) {
+        const k = b * 5, x0 = bb[k], x1 = bb[k + 1], z0 = bb[k + 2], z1 = bb[k + 3];
+        let sc;
+        if (v.x >= x0 - 1 && v.x <= x1 + 1 && v.z >= z0 - 1 && v.z <= z1 + 1) sc = (x1 - x0) * (z1 - z0);
+        else {
+          const d = Math.hypot(Math.max(0, x0 - v.x, v.x - x1), Math.max(0, z0 - v.z, v.z - z1));
+          if (d > 25) continue;
+          sc = 1e7 + d;
+        }
+        if (sc < score) { score = sc; win = b; }
+      }
+      if (win < 0 || (best[vi] && best[vi].score <= score)) return;
+      if (best[vi]) {
+        const old = best[vi].mesh.geometry.getAttribute('vid');
+        for (let i = 0; i < old.array.length; i++) if (old.array[i] === vi) old.array[i] = -1;
+        old.needsUpdate = true;
+      }
+      for (let i = 0; i < bl.length; i++) if (bl[i] === win) attr.array[i] = vi;
+      attr.needsUpdate = true;
+      best[vi] = { score, mesh };
+      v.bh = Math.max(bb[win * 5 + 4], 12);
+      v.bw = Math.max(12, Math.min(60, Math.max(bb[win * 5 + 1] - bb[win * 5], bb[win * 5 + 3] - bb[win * 5 + 2]) / 2));
+      changed = true;
+    });
+    if (changed) refreshScene();
+  }
+
+  const queue = [...city.tiles].sort((a, b) => a.dist - b.dist);
+  const packs = {};
+  const pack = n => packs[n] ??= bin(n);
+  let loaded = 0;
+  const workers = Array.from({ length: Math.min(4, navigator.hardwareConcurrency || 4) }, () => new Worker('worker.js', { type: 'module' }));
+  const tileDone = () => {
+    loaded++;
+    $('progress').textContent = Math.round(100 * loaded / city.tiles.length);
+    if (loaded === city.tiles.length) { $('loading').hidden = true; workers.forEach(w => w.terminate()); }
+  };
+  for (const w of workers) {
+    const next = async () => {
+      const t = queue.shift(); if (!t) return;
+      try {
+        const buf = (await pack(t.pack)).slice(t.offset, t.offset + t.length);
+        w.postMessage({ buf, id: t.file }, [buf]);
+      } catch (e) { console.error(e); tileDone(); next(); }
+    };
+    w.onerror = e => { console.error(e); tileDone(); next(); };
+    w.onmessage = ({ data: m }) => {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(m.pos, 3));
+      g.setAttribute('vid', new THREE.BufferAttribute(new Float32Array(m.bld.length).fill(-1), 1));
+      g.setIndex(new THREE.BufferAttribute(m.idx, 1));
+      const mesh = new THREE.Mesh(g, material({ value: reduce ? -10 : performance.now() / 1000 }));
+      mesh.scale.setScalar(0.1);
+      mesh.position.set(m.origin[0], 0, m.origin[1]);
+      scene.add(mesh);
+      matchVenues(m, mesh);
+      wake(0.9);
+      tileDone();
+      next();
+    };
+    next();
+  }
+
+  // ---------- UI ----------
+  const seg = (el, items, key, cur) => { el.innerHTML = items.map(([k, l]) => `<button type="button" data-${key}="${k}" aria-pressed="${String(k) === String(cur)}">${l}</button>`).join(''); };
+  const press = (el, pick) => el.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', pick(b)));
+  seg($('days'), DAYN.map((d, i) => [i, d]), 'd', S.day);
+  seg($('slots'), SLOTS, 's', S.slot);
+  seg($('views'), VIEWS, 'v', S.view);
+  $('free').setAttribute('aria-pressed', S.free);
+  $('days').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setDay(+b.dataset.d); });
+  $('slots').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; S.slot = b.dataset.s; store.set('adem-slot', S.slot); press($('slots'), x => x === b); summary(); refresh(); });
+  $('views').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; S.view = b.dataset.v; store.set('adem-view', S.view); press($('views'), x => x === b); refresh(); });
+  $('free').addEventListener('click', () => { S.free = !S.free; store.set('adem-free', S.free ? '1' : '0'); $('free').setAttribute('aria-pressed', S.free); summary(); refresh(); });
+  function setDay(d) {
+    S.day = d; store.set('adem-day', d); store.set('adem-day-set', '1');
+    press($('days'), x => +x.dataset.d === d); summary(); refresh();
+  }
+  function summary() { $('sumtext').textContent = `${DAYN[S.day]} · ${SLOTS.find(s => s[0] === S.slot)[1]}${S.free ? ' · Free only' : ''}`; }
+  summary();
+  $('filtertoggle').addEventListener('click', () => { const open = $('bar').classList.toggle('open'); $('filtertoggle').setAttribute('aria-expanded', open); });
+  $('hint').textContent = coarse ? 'Drag to move · two fingers to turn and zoom · tap a glow' : 'Drag to turn · right drag to move · scroll to zoom · click a glow';
+  if (GUIDE) { $('guidelink').href = GUIDE; $('guidelink').hidden = false; }
+  $('infobtn').addEventListener('click', () => { const o = $('info').hidden; $('info').hidden = !o; $('infobtn').setAttribute('aria-expanded', o); });
+  $('infoclose').addEventListener('click', () => { $('info').hidden = true; $('infobtn').setAttribute('aria-expanded', false); });
+  $('sheetbtn').addEventListener('click', () => { const o = $('side').classList.toggle('full'); $('sheetbtn').setAttribute('aria-expanded', o); $('sheetbtn').textContent = o ? 'Collapse' : 'Expand'; });
+
+  const head = $('sidehead'), list = $('list'), status = $('status');
+  const freeTag = x => x[3] === 1 ? '<span class="free">FREE</span>' : x[3] === 2 ? '<span class="free soft" title="The organiser says free entry">FREE?</span>' : '';
+  const when = x => `${hm(x[1])}${x[1] >= 1440 ? `<small class="nx">${DAYN[x[0] + 1] ? DAYN[x[0] + 1].slice(0, 3) : 'Mon'}</small>` : ''}<small>${x[2] ? 'to ' + x[2] : ''}</small>`;
+  const row = (x, v, i, showVenue) => `<div class="item" style="--c:${KINDC[x[4]]}"><div class="t">${when(x)}</div><div>
+    <p class="n"><a href="${ADE + x[6]}/" target="_blank" rel="noopener">${esc(x[5])}</a></p>
+    <div class="m">${freeTag(x)}<span class="k">${KINDL[x[4]]}</span>${showVenue ? `<button type="button" class="vlink" data-i="${i}">${esc(v.vn[x[10]] || v.n)}</button>${v.d ? `<span>${esc(v.d)}</span>` : ''}` : (v.vn.length > 1 ? `<span>${esc(v.vn[x[10]])}</span>` : '')}${x[7] ? '<span class="pick">ADE pick</span>' : ''}</div></div></div>`;
+  function otherDays() {
+    if (S.slot === 'now') return '';
+    const n = [0, 0, 0, 0, 0];
+    for (const v of V) for (const e of v.ev) if (e[0] !== S.day && inSlot(e) && (!S.free || e[3]) && qMatch(v, e)) n[e[0]]++;
+    const days = n.map((c, d) => [c, d]).filter(([c]) => c);
+    return days.length ? `<div class="other">Also on ${days.map(([c, d]) => `<button type="button" class="dayjump" data-d="${d}">${DAYN[d]} (${c})</button>`).join('')}</div>` : '';
+  }
+  const slotLabel = () => S.slot === 'all' ? '' : ', ' + SLOTS.find(s => s[0] === S.slot)[1].toLowerCase();
+  function panel() {
+    if (S.sel >= 0) {
+      const v = V[S.sel], e = evFor(v);
+      head.innerHTML = `<button class="back" type="button" id="back">${S.q.length ? 'Back to results' : 'All places'}</button><h2>${esc(v.vn.length > 1 ? v.vn.join(' · ') : v.n)}</h2>
+        <div class="sub"><span>${esc(v.d || '')}</span>${v.a ? `<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(v.vn[0] + ', ' + v.a + ', Amsterdam')}" target="_blank" rel="noopener">${esc(v.a)} &#8599;</a>` : ''}</div>`;
+      list.innerHTML = e.length ? e.map(x => row(x, v, S.sel, false)).join('')
+        : `<p class="empty">Nothing here on ${DAYN[S.day]}${slotLabel()}${S.free ? ' that is free' : ''}. Change the day or time, or go back.</p>`;
+      status.textContent = `${e.length} events at ${v.n}`;
+      return;
+    }
+    if (S.q.length) {
+      const hits = [];
+      V.forEach((v, i) => { for (const e of evFor(v)) hits.push([e, v, i]); });
+      hits.sort((a, b) => a[0][1] - b[0][1] || a[0][5].localeCompare(b[0][5]));
+      const nv = new Set(hits.map(h => h[2])).size;
+      head.innerHTML = `<h2>${hits.length} result${hits.length === 1 ? '' : 's'} on ${DAYN[S.day]}${slotLabel()}</h2>
+        <div class="sub"><span>${nv} place${nv === 1 ? '' : 's'} glowing on the map</span>${S.free ? '<span>free only</span>' : ''}</div>${otherDays()}`;
+      list.innerHTML = hits.length ? hits.slice(0, 250).map(([x, v, i]) => row(x, v, i, true)).join('')
+        : `<p class="empty">No match on ${DAYN[S.day]}${slotLabel()}${S.free ? ' among free events' : ''}.${S.free ? ' Try switching off Free only.' : ''} Artists only match when the organiser listed the lineup on the ADE page.</p>`;
+      status.textContent = `${hits.length} results`;
+      return;
+    }
+    const vs = V.map((v, i) => [v, i]).filter(([v]) => v.c).sort((a, b) => b[0].nf - a[0].nf || b[0].c - a[0].c);
+    const total = vs.reduce((s, [v]) => s + v.c, 0), free = vs.reduce((s, [v]) => s + v.nf, 0);
+    head.innerHTML = `<h2>${DAYL[S.day]} Oct${slotLabel()}</h2>
+      <div class="sub"><span>${total} events</span><span class="fc">${free} free</span><span>${vs.length} places</span><span>${TOTAL.toLocaleString('en')} all week</span></div>`;
+    list.innerHTML = vs.length ? vs.map(([v, i]) => `<button class="vbtn" type="button" data-i="${i}"><b>${esc(v.n)}</b><em class="${v.nf ? '' : 'p'}">${v.nf ? v.nf + ' free' : v.c}</em><span>${esc(v.d || '')}${v.d && v.a ? ' · ' : ''}${esc(v.a)}</span></button>`).join('')
+      : `<p class="empty">${S.slot === 'now' ? 'Nothing listed as running right now. Try Night or All day.' : 'Nothing in this slot. Try another time of day or switch off Free only.'}</p>`;
+    status.textContent = `${total} events at ${vs.length} places`;
+  }
+  list.addEventListener('click', e => { const b = e.target.closest('.vbtn, .vlink'); if (b) select(+b.dataset.i, true); });
+  head.addEventListener('click', e => {
+    if (e.target.closest('#back')) { S.sel = -1; refresh(); return; }
+    const b = e.target.closest('.dayjump'); if (b) setDay(+b.dataset.d);
+  });
+  const qEl = $('q'), qClear = $('qclear');
+  let qt = 0;
+  function setQuery(text) {
+    S.q = fold(text).split(/\s+/).filter(Boolean);
+    qClear.hidden = !text;
+    S.sel = -1;
+    refresh();
+  }
+  qEl.addEventListener('input', () => { clearTimeout(qt); qt = setTimeout(() => setQuery(qEl.value), 140); });
+  qClear.addEventListener('click', () => { qEl.value = ''; setQuery(''); qEl.focus(); });
+  addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    if (document.activeElement === qEl && qEl.value) { qEl.value = ''; setQuery(''); }
+    else if (S.sel >= 0) { S.sel = -1; refresh(); }
+  });
+
+  // ---------- share and deep links (#d=2&t=night&q=techno&p=12&v=heat) ----------
+  function readHash() {
+    const h = new URLSearchParams(location.hash.slice(1));
+    if (h.has('d') && +h.get('d') >= 0 && +h.get('d') < 5) S.day = +h.get('d');
+    if (h.has('t') && SLOTS.some(s => s[0] === h.get('t'))) S.slot = h.get('t');
+    if (h.has('v') && VIEWS.some(s => s[0] === h.get('v'))) S.view = h.get('v');
+    if (h.has('f')) S.free = h.get('f') === '1';
+    if (h.has('q')) S.qText = h.get('q');
+    if (h.has('p') && V[+h.get('p')]) S.sel = +h.get('p');
+  }
+  function writeHash() {
+    const h = new URLSearchParams({ d: S.day, t: S.slot, v: S.view, f: S.free ? 1 : 0 });
+    if (qEl.value) h.set('q', qEl.value);
+    if (S.sel >= 0) h.set('p', S.sel);
+    try { history.replaceState(null, '', '#' + h.toString()); } catch {}
+  }
+  $('share').addEventListener('click', async () => {
+    writeHash();
+    const url = location.href, title = S.sel >= 0 ? `${V[S.sel].n} at ADE 2026` : 'ADE 2026 by night';
+    if (navigator.share && coarse) { try { await navigator.share({ title, url }); } catch {} return; }
+    try { await navigator.clipboard.writeText(url); toast('Link copied'); } catch { toast(url); }
+  });
+  let tt = 0;
+  function toast(t) { const el = $('toast'); el.textContent = t; el.hidden = false; clearTimeout(tt); tt = setTimeout(() => { el.hidden = true; }, 2600); }
+
+  // ---------- picking and camera flights ----------
+  let flight = null;
+  function flyTo(x, z) {
+    const dir = camera.position.clone().sub(controls.target).normalize();
+    const d = Math.min(camera.position.distanceTo(controls.target), 1500);
+    const tgt = new THREE.Vector3(x, 0, z);
+    // On phones the list covers the bottom of the screen, so aim a little past the venue to lift it into view.
+    if (mobile()) tgt.add(new THREE.Vector3(dir.x, 0, dir.z).normalize().multiplyScalar(d * 0.22));
+    flight = { t: 0, fromT: controls.target.clone(), toT: tgt, fromP: camera.position.clone(), toP: tgt.clone().add(dir.multiplyScalar(d)) };
+    wake();
+  }
+  function select(i, fly) {
+    S.sel = i; refresh();
+    if (fly) flyTo(V[i].x, V[i].z);
+    if (mobile()) { $('side').classList.remove('full'); $('sheetbtn').textContent = 'Expand'; }
+  }
+  const ray = new THREE.Raycaster(), ptr = new THREE.Vector2(), tip = $('tip');
+  function pick(cx, cy) {
+    const r = canvas.getBoundingClientRect();
+    ptr.set(((cx - r.left) / r.width) * 2 - 1, -((cy - r.top) / r.height) * 2 + 1);
+    ray.setFromCamera(ptr, camera);
+    const h = ray.intersectObjects(hits.filter(m => m.parent.visible), false)[0];
+    return h ? h.object.userData.i : -1;
+  }
+  const pointers = new Set();
+  let down = null, multi = false;
+  canvas.addEventListener('pointerdown', e => { pointers.add(e.pointerId); if (pointers.size > 1) multi = true; else { down = [e.clientX, e.clientY]; multi = false; } });
+  canvas.addEventListener('pointercancel', e => pointers.delete(e.pointerId));
+  canvas.addEventListener('pointerup', e => {
+    pointers.delete(e.pointerId);
+    if (multi || !down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 6) return;
+    const i = pick(e.clientX, e.clientY);
+    if (i >= 0) select(i, true);
+    else if (S.sel >= 0) { S.sel = -1; refresh(); }
+  });
+  canvas.addEventListener('pointermove', e => {
+    if (e.pointerType !== 'mouse' || e.buttons) { tip.hidden = true; return; }
+    const i = pick(e.clientX, e.clientY);
+    canvas.style.cursor = i >= 0 ? 'pointer' : '';
+    if (i < 0) { tip.hidden = true; return; }
+    const v = V[i];
+    tip.innerHTML = `${esc(v.n)}<br><span>${v.c} event${v.c > 1 ? 's' : ''}${v.nf ? ', ' + v.nf + ' free' : ''}</span>`;
+    tip.style.left = Math.min(e.clientX + 14, innerWidth - 250) + 'px'; tip.style.top = e.clientY + 12 + 'px'; tip.hidden = false;
+  });
+  canvas.addEventListener('pointerleave', () => { tip.hidden = true; });
+
+  function resize() {
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+    renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); wake();
+  }
+  addEventListener('resize', resize); resize();
+  if (S.qText) { qEl.value = S.qText; S.q = fold(S.qText).split(/\s+/).filter(Boolean); qClear.hidden = false; }
+  refresh();
+  if (S.sel >= 0) flyTo(V[S.sel].x, V[S.sel].z);
+
+  // Render only when something moves: camera, flights, tiles rising, or the slow pulse in beam view.
+  renderer.setAnimationLoop(() => {
+    const now = performance.now();
+    uniforms.uNow.value = now / 1000;
+    if (flight) {
+      flight.t = Math.min(flight.t + (reduce ? 1 : 0.03), 1);
+      const k = flight.t * flight.t * (3 - 2 * flight.t);
+      controls.target.lerpVectors(flight.fromT, flight.toT, k);
+      camera.position.lerpVectors(flight.fromP, flight.toP, k);
+      if (flight.t >= 1) flight = null;
+      dirty = true;
+    }
+    if (S.view === 'beams' && !reduce && !document.hidden) {
+      const pulse = 0.13 + 0.05 * Math.sin(now / 1000 * 2.2);
+      for (const v of V) if (v.g.visible) v.g.userData.halo.material.opacity = pulse;
+      dirty = true;
+    }
+    controls.update();
+    if (dirty || now < busyUntil) { renderer.render(scene, camera); dirty = false; }
+  });
+}

@@ -174,15 +174,15 @@ async function main() {
 
   // ---------- state ----------
   const S = {
-    view: store.get('adem-view') || 'heat', free: store.get('adem-free') === '1', slot: store.get('adem-slot') || 'all',
-    day: +(store.get('adem-day') ?? 0), sel: -1, q: [], qText: '',
+    view: store.get('adem-view') || 'lit', free: store.get('adem-free') === '1', slot: store.get('adem-slot') || 'all',
+    day: +(store.get('adem-day') ?? -1), sel: -1, q: [], qText: '',
   };
   const NOW = amsNow();
   if (NOW.live && !store.get('adem-day-set')) S.day = NOW.day;
-  if (!(S.day >= 0 && S.day < 5)) S.day = 0;
-  const VIEWS = [['heat', 'Heat glow'], ['lit', 'Lit buildings'], ['beams', 'Beams']];
+  if (!(S.day >= -1 && S.day < 5)) S.day = 0;   // -1 means all five days
+  const VIEWS = [['lit', 'Lit'], ['heat', 'Heat'], ['beams', 'Beams']];
   const SLOTS = [['all', 'All day'], ...(NOW.live ? [['now', 'Now']] : []), ['morning', 'Morning'], ['afternoon', 'Afternoon'], ['evening', 'Evening'], ['night', 'Night']];
-  if (!VIEWS.some(v => v[0] === S.view)) S.view = 'heat';
+  if (!VIEWS.some(v => v[0] === S.view)) S.view = 'lit';
   if (!SLOTS.some(v => v[0] === S.slot)) S.slot = 'all';
   readHash();
 
@@ -203,7 +203,7 @@ async function main() {
   V.forEach((v, i) => v.ev.forEach(e => KEY.set(pid(e), [e, i])));
   const plan = new Set((() => { try { return JSON.parse(store.get('adem-plan') || '[]'); } catch { return []; } })().filter(k => KEY.has(k)));
   S.tab = 'events';
-  const evFor = v => S.tab === 'plan' ? v.ev.filter(e => plan.has(pid(e))) : v.ev.filter(e => e[0] === S.day && inSlot(e) && (!S.free || e[3]) && qMatch(v, e));
+  const evFor = v => S.tab === 'plan' ? v.ev.filter(e => plan.has(pid(e))) : v.ev.filter(e => (S.day < 0 || e[0] === S.day) && inSlot(e) && (!S.free || e[3]) && qMatch(v, e));
 
   // ---------- venue markers ----------
   const beamGeo = new THREE.CylinderGeometry(1, 1, 1, 14, 1, true); beamGeo.translate(0, 0.5, 0);
@@ -363,11 +363,13 @@ async function main() {
   // ---------- UI ----------
   const seg = (el, items, key, cur) => { el.innerHTML = items.map(([k, l]) => `<button type="button" data-${key}="${k}" aria-pressed="${String(k) === String(cur)}">${l}</button>`).join(''); };
   const press = (el, pick) => el.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', pick(b)));
-  seg($('days'), DAYN.map((d, i) => [i, d]), 'd', S.day);
+  seg($('days'), [[-1, 'All'], ...DAYN.map((d, i) => [i, d])], 'd', S.day);
   seg($('slots'), SLOTS, 's', S.slot);
   seg($('views'), VIEWS, 'v', S.view);
+  const VT = { heat: 'Heat glow: pools of light on the ground', lit: 'Lit buildings: the venue building lights up', beams: 'Beams: light columns, height shows event count' };
+  $('views').querySelectorAll('button').forEach(b => { b.title = VT[b.dataset.v]; });
   $('free').setAttribute('aria-pressed', S.free);
-  $('days').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setDay(+b.dataset.d); });
+  $('days').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setDay(+b.dataset.d === S.day ? -1 : +b.dataset.d); });
   $('slots').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; S.slot = b.dataset.s; store.set('adem-slot', S.slot); press($('slots'), x => x === b); summary(); refresh(); });
   $('views').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; S.view = b.dataset.v; store.set('adem-view', S.view); press($('views'), x => x === b); refresh(); });
   $('free').addEventListener('click', () => { S.free = !S.free; store.set('adem-free', S.free ? '1' : '0'); $('free').setAttribute('aria-pressed', S.free); summary(); refresh(); });
@@ -375,7 +377,8 @@ async function main() {
     S.day = d; store.set('adem-day', d); store.set('adem-day-set', '1');
     press($('days'), x => +x.dataset.d === d); summary(); refresh();
   }
-  function summary() { $('sumtext').textContent = `${DAYN[S.day]} · ${SLOTS.find(s => s[0] === S.slot)[1]}${S.free ? ' · Free only' : ''}`; }
+  const dayName = () => S.day < 0 ? 'All days' : DAYN[S.day];
+  function summary() { $('sumtext').textContent = `${dayName()} · ${SLOTS.find(s => s[0] === S.slot)[1]}${S.free ? ' · Free only' : ''}`; }
   summary();
   $('filtertoggle').addEventListener('click', () => { const open = $('bar').classList.toggle('open'); $('filtertoggle').setAttribute('aria-expanded', open); });
   $('hint').textContent = coarse ? 'Drag to move · pinch to zoom · two fingers to turn · tap a glow' : 'Drag to move · right drag to turn and tilt · scroll to zoom · arrow keys pan · click a glow';
@@ -390,7 +393,7 @@ async function main() {
   const addBtn = x => { const k = pid(x), on = plan.has(k); return `<button type="button" class="add" data-k="${k}" aria-pressed="${on}" aria-label="${on ? 'Remove from' : 'Add to'} my plan" title="${on ? 'Remove from' : 'Add to'} my plan">${on ? '&#10003;' : '+'}</button>`; };
   const row = (x, v, i, showVenue) => `<div class="item" style="--c:${KINDC[x[4]]}"><div class="t">${when(x)}</div><div>
     <p class="n"><a href="${ADE + x[6]}/" target="_blank" rel="noopener">${esc(x[5])}</a></p>
-    <div class="m">${freeTag(x)}<span class="k">${KINDL[x[4]]}</span>${showVenue ? `<button type="button" class="vlink" data-i="${i}">${esc(v.vn[x[10]] || v.n)}</button>${v.d ? `<span>${esc(v.d)}</span>` : ''}` : (v.vn.length > 1 ? `<span>${esc(v.vn[x[10]])}</span>` : '')}${x[7] ? '<span class="pick">ADE pick</span>' : ''}</div></div>${addBtn(x)}</div>`;
+    <div class="m">${S.day < 0 && S.tab !== 'plan' ? `<span class="dy">${DAYN[x[0]]}</span>` : ''}${freeTag(x)}<span class="k">${KINDL[x[4]]}</span>${showVenue ? `<button type="button" class="vlink" data-i="${i}">${esc(v.vn[x[10]] || v.n)}</button>${v.d ? `<span>${esc(v.d)}</span>` : ''}` : (v.vn.length > 1 ? `<span>${esc(v.vn[x[10]])}</span>` : '')}${x[7] ? '<span class="pick">ADE pick</span>' : ''}</div></div>${addBtn(x)}</div>`;
   function planItems() {
     const out = [...plan].map(k => KEY.get(k)).filter(Boolean).map(([e, i]) => ({ e, i, v: V[i] }))
       .sort((a, b) => a.e[0] - b.e[0] || a.e[1] - b.e[1]);
@@ -433,6 +436,7 @@ async function main() {
   function otherDays() {
     if (S.slot === 'now') return '';
     const n = [0, 0, 0, 0, 0];
+    if (S.day < 0) return '';
     for (const v of V) for (const e of v.ev) if (e[0] !== S.day && inSlot(e) && (!S.free || e[3]) && qMatch(v, e)) n[e[0]]++;
     const days = n.map((c, d) => [c, d]).filter(([c]) => c);
     return days.length ? `<div class="other">Also on ${days.map(([c, d]) => `<button type="button" class="dayjump" data-d="${d}">${DAYN[d]} (${c})</button>`).join('')}</div>` : '';
@@ -445,26 +449,26 @@ async function main() {
       head.innerHTML = `<button class="back" type="button" id="back">${S.q.length ? 'Back to results' : 'All places'}</button><h2>${esc(v.vn.length > 1 ? v.vn.join(' · ') : v.n)}</h2>
         <div class="sub"><span>${esc(v.d || '')}</span>${v.a ? `<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(v.vn[0] + ', ' + v.a + ', Amsterdam')}" target="_blank" rel="noopener">${esc(v.a)} &#8599;</a>` : ''}</div>`;
       list.innerHTML = e.length ? e.map(x => row(x, v, S.sel, false)).join('')
-        : `<p class="empty">Nothing here on ${DAYN[S.day]}${slotLabel()}${S.free ? ' that is free' : ''}. Change the day or time, or go back.</p>`;
+        : `<p class="empty">Nothing here on ${S.day < 0 ? 'any day' : DAYN[S.day]}${slotLabel()}${S.free ? ' that is free' : ''}. Change the day or time, or go back.</p>`;
       status.textContent = `${e.length} events at ${v.n}`;
       return;
     }
     if (S.q.length) {
       const hits = [];
       V.forEach((v, i) => { for (const e of evFor(v)) hits.push([e, v, i]); });
-      hits.sort((a, b) => a[0][1] - b[0][1] || a[0][5].localeCompare(b[0][5]));
+      hits.sort((a, b) => a[0][0] - b[0][0] || a[0][1] - b[0][1] || a[0][5].localeCompare(b[0][5]));
       const nv = new Set(hits.map(h => h[2])).size;
-      head.innerHTML = `<h2>${hits.length} result${hits.length === 1 ? '' : 's'} on ${DAYN[S.day]}${slotLabel()}</h2>
+      head.innerHTML = `<h2>${hits.length} result${hits.length === 1 ? '' : 's'} ${S.day < 0 ? 'across all days' : 'on ' + DAYN[S.day]}${slotLabel()}</h2>
         <div class="sub"><span>${nv} place${nv === 1 ? '' : 's'} glowing on the map</span>${S.free ? '<span>free only</span>' : ''}</div>${otherDays()}`;
       list.innerHTML = hits.length ? hits.slice(0, 250).map(([x, v, i]) => row(x, v, i, true)).join('')
-        : `<p class="empty">No match on ${DAYN[S.day]}${slotLabel()}${S.free ? ' among free events' : ''}.${S.free ? ' Try switching off Free only.' : ''} Artists only match when the organiser listed the lineup on the ADE page.</p>`;
+        : `<p class="empty">No match ${S.day < 0 ? 'on any day' : 'on ' + DAYN[S.day]}${slotLabel()}${S.free ? ' among free events' : ''}.${S.free ? ' Try switching off Free only.' : ''} Artists only match when the organiser listed the lineup on the ADE page.</p>`;
       status.textContent = `${hits.length} results`;
       return;
     }
     const vs = V.map((v, i) => [v, i]).filter(([v]) => v.c).sort((a, b) => b[0].nf - a[0].nf || b[0].c - a[0].c);
     const total = vs.reduce((s, [v]) => s + v.c, 0), free = vs.reduce((s, [v]) => s + v.nf, 0);
-    head.innerHTML = `<h2>${DAYL[S.day]} Oct${slotLabel()}</h2>
-      <div class="sub"><span>${total} events</span><span class="fc">${free} free</span><span>${vs.length} places</span><span>${TOTAL.toLocaleString('en')} all week</span></div>`;
+    head.innerHTML = `<h2>${S.day < 0 ? 'All five days' : DAYL[S.day] + ' Oct'}${slotLabel()}</h2>
+      <div class="sub"><span>${total.toLocaleString('en')} events</span><span class="fc">${free} free</span><span>${vs.length} places</span><span>${TOTAL.toLocaleString('en')} all week</span></div>`;
     list.innerHTML = vs.length ? vs.map(([v, i]) => `<button class="vbtn" type="button" data-i="${i}"><b>${esc(v.n)}</b><em class="${v.nf ? '' : 'p'}">${v.nf ? v.nf + ' free' : v.c}</em><span>${esc(v.d || '')}${v.d && v.a ? ' · ' : ''}${esc(v.a)}</span></button>`).join('')
       : `<p class="empty">${S.slot === 'now' ? 'Nothing listed as running right now. Try Night or All day.' : 'Nothing in this slot. Try another time of day or switch off Free only.'}</p>`;
     status.textContent = `${total} events at ${vs.length} places`;
@@ -537,7 +541,7 @@ async function main() {
   // ---------- share and deep links (#d=2&t=night&q=techno&p=12&v=heat) ----------
   function readHash() {
     const h = new URLSearchParams(location.hash.slice(1));
-    if (h.has('d') && +h.get('d') >= 0 && +h.get('d') < 5) S.day = +h.get('d');
+    if (h.has('d') && +h.get('d') >= -1 && +h.get('d') < 5) S.day = +h.get('d');
     if (h.has('t') && SLOTS.some(s => s[0] === h.get('t'))) S.slot = h.get('t');
     if (h.has('v') && VIEWS.some(s => s[0] === h.get('v'))) S.view = h.get('v');
     if (h.has('f')) S.free = h.get('f') === '1';

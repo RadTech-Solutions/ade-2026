@@ -410,10 +410,12 @@ async function main() {
     }
     return out;
   }
+  // Export choices, remembered per browser.
+  const X = { layout: store.get('adem-xlayout') === 'list' ? 'list' : 'timetable', theme: 'dark' };
   function planPanel() {
     const items = planItems(), free = items.filter(x => x.e[3]).length;
     head.innerHTML = `<h2>My plan</h2><div class="sub"><span>${items.length} saved</span><span class="fc">${free} free</span><span>kept in this browser</span></div>
-      ${items.length ? `<div class="planbtns"><button type="button" data-act="png">Save as image</button><button type="button" data-act="pdf">Save as PDF</button><button type="button" data-act="share">Share plan</button><button type="button" data-act="clear">Clear</button></div>` : ''}`;
+      ${items.length ? `<div class="xopts"><span>Export</span><div class="seg" id="xlayout">${[['timetable', 'Timetable'], ['list', 'List']].map(([k, l]) => `<button type="button" data-x="${k}" aria-pressed="${X.layout === k}">${l}</button>`).join('')}</div></div><div class="planbtns"><button type="button" data-act="png">Save as image</button><button type="button" data-act="pdf">Save as PDF</button><button type="button" data-act="share">Share plan</button><button type="button" data-act="clear">Clear</button></div>` : ''}`;
     if (!items.length) { list.innerHTML = `<p class="empty">Tap <b>+</b> next to any event to add it here. Then save your plan as one A4 page (image or PDF) or share it as a link. Nothing leaves your browser.</p>`; status.textContent = 'Plan is empty'; return; }
     let html = '', day = -1;
     for (const it of items) {
@@ -491,6 +493,12 @@ async function main() {
   });
   $('tabs').addEventListener('click', e => { const b = e.target.closest('button[data-tab]'); if (b) setTab(b.dataset.tab); });
   head.addEventListener('click', async e => {
+    const xo = e.target.closest('#xlayout button');
+    if (xo) {
+      if (xo.dataset.x) { X.layout = xo.dataset.x; store.set('adem-xlayout', X.layout); }
+      xo.parentElement.querySelectorAll('button').forEach(z => z.setAttribute('aria-pressed', z === xo));
+      return;
+    }
     const b = e.target.closest('.planbtns button'); if (!b) return;
     const act = b.dataset.act;
     if (act === 'clear') { if (b.dataset.sure) { plan.clear(); store.set('adem-plan', '[]'); countPlan(); refresh(); } else { b.dataset.sure = 1; b.textContent = 'Tap again to clear'; } return; }
@@ -504,8 +512,9 @@ async function main() {
     b.disabled = true; const label = b.textContent; b.textContent = 'Drawing…';
     try {
       const { renderPlan, canvasToPdf } = await import('./export.js');
-      const items = planItems().map(({ e, v, clash }) => ({ day: e[0], start: e[1], end: e[2], title: e[5], venue: v.vn[e[10]] || v.n, address: v.a, district: v.d, free: e[3] === 1 ? 'FREE' : e[3] === 2 ? 'FREE?' : '', clash }));
-      const cv = await renderPlan(items, { site: SITE });
+      const items = planItems().map(({ e, v, clash }) => ({ day: e[0], start: e[1], end: e[2], title: e[5], venue: v.vn[e[10]] || v.n, address: v.a, district: v.d, kind: e[4], free: e[3] === 1 ? 'FREE' : e[3] === 2 ? 'FREE?' : '', clash }));
+      const cv = await renderPlan(items, { site: SITE, layout: X.layout, theme: X.theme });
+      track('export-style', { layout: X.layout });
       const blob = act === 'pdf' ? await canvasToPdf(cv) : await new Promise(r => cv.toBlob(r, 'image/png'));
       const name = `my-ade-2026-plan.${act === 'pdf' ? 'pdf' : 'png'}`;
       const file = new File([blob], name, { type: blob.type });

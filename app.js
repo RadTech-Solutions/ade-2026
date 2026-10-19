@@ -198,7 +198,59 @@ async function main() {
     if (s === 'evening') return m >= 1020 && m < 1320;
     return m >= 1320;
   };
-  const qMatch = (v, e) => !S.q.length || S.q.every(w => e[9].includes(w) || v.s.includes(w));
+  // Search tolerates typos: exact text first, then the same text without spaces ("lane8" finds "Lane 8"),
+  // then words within one edit (4 to 6 letters) or two edits (7+ letters), swaps counting as one ("matahme" finds Mathame).
+  const wordsOf = t => new Set(t.split(/[^a-z0-9]+/).filter(w => w.length > 2));
+  const vocab = new Set();
+  V.forEach(v => { v.w = wordsOf(v.s); v.cs = v.s.replace(/\s+/g, ''); v.w.forEach(x => vocab.add(x)); v.ev.forEach(e => { e.w = wordsOf(e[9]); e.cs = e[9].replace(/\s+/g, ''); e.w.forEach(x => vocab.add(x)); }); });
+  function dist(a, b, max) {
+    if (Math.abs(a.length - b.length) > max) return max + 1;
+    const d = Array.from({ length: a.length + 1 }, (_, i) => [i]);
+    for (let j = 1; j <= b.length; j++) d[0][j] = j;
+    for (let i = 1; i <= a.length; i++) {
+      let rowMin = Infinity;
+      for (let j = 1; j <= b.length; j++) {
+        const c = a[i - 1] === b[j - 1] ? 0 : 1;
+        d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + c);
+        if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+        rowMin = Math.min(rowMin, d[i][j]);
+      }
+      if (rowMin > max) return max + 1;
+    }
+    return d[a.length][b.length];
+  }
+  const near = new Map();
+  function nearWords(t) {
+    if (near.has(t)) return near.get(t);
+    const max = t.length >= 7 ? 2 : t.length >= 4 ? 1 : 0, out = [];
+    if (max) for (const w of vocab) {
+      // compare whole words, and also the start of longer words so half-typed misspellings still land
+      if (dist(t, w, max) <= max || (w.length > t.length + 1 && dist(t, w.slice(0, t.length), max) <= max)) out.push(w);
+    }
+    near.set(t, out);
+    return out;
+  }
+  // Typo matching only kicks in when the exact text (with or without spaces) appears nowhere, so real hits are never diluted.
+  const exactAnywhere = new Map();
+  const hasExact = t => {
+    if (!exactAnywhere.has(t)) exactAnywhere.set(t, V.some(v => v.s.includes(t) || v.cs.includes(t) || v.ev.some(e => e[9].includes(t) || e.cs.includes(t))));
+    return exactAnywhere.get(t);
+  };
+  const tokenHit = (t, v, e) => {
+    if (e[9].includes(t) || v.s.includes(t) || e.cs.includes(t) || v.cs.includes(t)) return true;
+    if (hasExact(t)) return false;
+    const nw = nearWords(t);
+    return nw.length > 0 && nw.some(w => e.w.has(w) || v.w.has(w));
+  };
+  // A multi-word query that exists as a phrase ("lane 8", "i hate models") matches as that phrase, not word by word.
+  const qMatch = (v, e) => {
+    if (!S.q.length) return true;
+    if (S.q.length > 1) {
+      const ph = S.q.join('');
+      if (hasExact(ph)) return e.cs.includes(ph) || v.cs.includes(ph);
+    }
+    return S.q.every(t => tokenHit(t, v, e));
+  };
   // My plan: events saved in this browser, keyed by ADE event id and night.
   const pid = e => e[6].split('/').pop() + '@' + e[0];
   const KEY = new Map();
@@ -551,10 +603,18 @@ async function main() {
   });
   const qEl = $('q'), qClear = $('qclear');
   let qt = 0;
-  let qTrack = 0;
+  // Log a search once: after 4 s without typing, or when a result is picked. Includes how many results it found.
+  let qTrack = 0, lastLogged = '';
+  const logSearch = () => {
+    const q = qEl.value.trim().toLowerCase().slice(0, 60);
+    if (q.length < 2 || q === lastLogged) return;
+    lastLogged = q;
+    let n = 0; for (const v of V) n += evFor(v).length;
+    track('search', { q, results: n });
+  };
   function setQuery(text) {
     clearTimeout(qTrack);
-    if (text.trim().length > 1) qTrack = setTimeout(() => track('search', { q: text.trim().toLowerCase().slice(0, 60) }), 1500);
+    if (text.trim().length > 1) qTrack = setTimeout(logSearch, 4000);
     S.q = fold(text).split(/\s+/).filter(Boolean);
     qClear.hidden = !text;
     S.sel = -1;
@@ -634,6 +694,7 @@ async function main() {
   }
   $('nav').addEventListener('click', e => { const b = e.target.closest('button[data-nav]'); if (b) nav(b.dataset.nav); });
   function select(i, fly) {
+    if (S.q.length) { clearTimeout(qTrack); logSearch(); }
     track('venue', { venue: V[i].n.slice(0, 80) });
     if (S.tab === 'plan') { S.tab = 'events'; document.querySelectorAll('#tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === 'events')); $('side').classList.remove('planmode'); }
     S.sel = i; refresh();

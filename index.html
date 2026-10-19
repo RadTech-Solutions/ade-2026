@@ -200,6 +200,12 @@ a{color:var(--ink-2)}
 #badge svg{width:18px;height:18px;display:block}
 #badge .hits{height:30px;display:flex;align-items:center;padding:0 8px;background:var(--panel);border:1px solid var(--rule)}
 #badge .hits img{height:18px;display:block}
+#beer{width:34px;height:32px;padding:0;border:1px solid var(--rule);background:var(--panel);font-size:17px;line-height:1;display:grid;place-items:center;letter-spacing:0;text-transform:none}
+#beer span{display:inline-block;transform-origin:50% 90%;animation:cheers 3.2s ease-in-out infinite}
+#beer:hover{border-color:var(--free)}
+#beer:hover span{animation-duration:.9s}
+@keyframes cheers{0%,72%,100%{transform:rotate(0)}78%{transform:rotate(-14deg)}86%{transform:rotate(10deg)}93%{transform:rotate(-4deg)}}
+@media (prefers-reduced-motion:reduce){#beer span{animation:none}}
 #infobtn{width:32px;height:32px;padding:0;border:1px solid var(--rule);background:var(--panel);font-family:Georgia,serif;font-size:15px;font-style:italic;text-transform:none;letter-spacing:0;color:var(--ink)}
 
 #nav{right:calc(max(12px,env(safe-area-inset-right,0px)) + 384px);bottom:calc(12px + env(safe-area-inset-bottom,0px));display:flex;gap:8px;padding:8px;align-items:center}
@@ -269,6 +275,7 @@ a{color:var(--ink-2)}
   <button id="infobtn" type="button" aria-expanded="false" aria-controls="info" aria-label="About this map">i</button>
   <a class="rt" href="https://radtech.nl" target="_blank" rel="noopener"><rt-logo mode="beat" size="18" aria-hidden="true"></rt-logo><span><span class="heart">&#9829;</span> by <b>RadTech</b> in <em class="city">Amsterdam</em></span><svg class="grachten" viewBox="0 0 46 27" aria-hidden="true"><path fill="#5FDDCF" d="M0 27V10h2V7h2V4h2V1.5h1V4h2v3h1v3h1v17z"/><path fill="#FFCB4D" d="M11 27V9q0-3 2.2-3 .6-4 2.8-4t2.8 4Q21 6 21 9v18z"/><path fill="#FF6BB5" d="M22 27V11h2V5h1.5V3.5h3V5H30v6h2v16z"/><g transform="rotate(8 38 27)"><path fill="#A98BFF" d="M33 27V9l5-6 5 6v18z"/></g><g fill="rgba(11,13,18,.72)"><rect x="2.0" y="13.0" width="2.4" height="2.8" rx=".4"/><rect x="5.6" y="13.0" width="2.4" height="2.8" rx=".4"/><rect x="2.0" y="17.2" width="2.4" height="2.8" rx=".4"/><rect x="5.6" y="17.2" width="2.4" height="2.8" rx=".4"/><rect x="2.0" y="21.4" width="2.4" height="2.8" rx=".4"/><rect x="5.6" y="21.4" width="2.4" height="2.8" rx=".4"/><rect x="13.0" y="13.0" width="2.4" height="2.8" rx=".4"/><rect x="16.6" y="13.0" width="2.4" height="2.8" rx=".4"/><rect x="13.0" y="17.2" width="2.4" height="2.8" rx=".4"/><rect x="16.6" y="17.2" width="2.4" height="2.8" rx=".4"/><rect x="13.0" y="21.4" width="2.4" height="2.8" rx=".4"/><rect x="16.6" y="21.4" width="2.4" height="2.8" rx=".4"/><rect x="24.0" y="13.0" width="2.4" height="2.8" rx=".4"/><rect x="27.6" y="13.0" width="2.4" height="2.8" rx=".4"/><rect x="24.0" y="17.2" width="2.4" height="2.8" rx=".4"/><rect x="27.6" y="17.2" width="2.4" height="2.8" rx=".4"/><rect x="24.0" y="21.4" width="2.4" height="2.8" rx=".4"/><rect x="27.6" y="21.4" width="2.4" height="2.8" rx=".4"/><g transform="rotate(8 38 27)"><rect x="35.0" y="13.0" width="2.4" height="2.8" rx=".4"/><rect x="38.6" y="13.0" width="2.4" height="2.8" rx=".4"/><rect x="35.0" y="17.2" width="2.4" height="2.8" rx=".4"/><rect x="38.6" y="17.2" width="2.4" height="2.8" rx=".4"/><rect x="35.0" y="21.4" width="2.4" height="2.8" rx=".4"/><rect x="38.6" y="21.4" width="2.4" height="2.8" rx=".4"/></g></g></svg></a>
   <a class="hits" href="https://hits.sh/radtech-solutions.github.io/ade-2026/" target="_blank" rel="noopener" title="Anonymous visit counter"><img src="https://hits.sh/radtech-solutions.github.io/ade-2026.svg?label=visits&amp;color=5FDDCF&amp;labelColor=0B1322&amp;style=flat-square" alt="Visit counter"></a>
+  <button id="beer" type="button" aria-label="Buy us a drink" title="Buy us a drink"><span aria-hidden="true">&#127867;</span></button>
 </div>
 
 <div id="info" class="ui" hidden>
@@ -314,7 +321,7 @@ a{color:var(--ink-2)}
   <div class="box">
     <div class="glow" aria-hidden="true"></div>
     <div class="grid" aria-hidden="true"><i style="--d:0"></i><i style="--d:1"></i><i style="--d:2"></i><i style="--d:1"></i><i style="--d:2"></i><i style="--d:3"></i><i style="--d:2"></i><i style="--d:3"></i><i style="--d:4"></i></div>
-    <p class="kick">Plan saved &#10003;</p>
+    <p class="kick" id="thankskick">Plan saved &#10003;</p>
     <h2 id="thankst">Your ADE is <em>sorted.</em></h2>
     <p class="lede">Now go dance. <span>Loved it, and no ads?</span></p>
     <svg class="squiggle" viewBox="0 0 220 96" aria-hidden="true"><path d="M18 6 C 70 6, 120 18, 112 44 C 104 70, 40 58, 64 34 C 84 16, 150 40, 168 84" /><path class="hd" d="M152 74 L 169 88 L 176 67" /></svg>

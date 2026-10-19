@@ -633,12 +633,13 @@ async function main() {
       const file = new File([blob], name, { type: blob.type });
       if (coarse && navigator.canShare && navigator.canShare({ files: [file] })) { try { await navigator.share({ files: [file], title: 'My ADE 2026 plan' }); } catch {} }
       else { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000); }
-      setTimeout(() => { $('thanks').hidden = false; $('thanksclose').focus(); }, 700);
+      setTimeout(() => { $('thankskick').textContent = 'Plan saved \u2713'; $('thanks').hidden = false; $('thanksclose').focus(); }, 700);
     } catch (err) { console.error(err); toast('Could not save the plan. Try the other format.'); }
     b.disabled = false; b.textContent = label;
   });
   if (COFFEE) { $('coffee').href = COFFEE; $('coffee').hidden = false; $('coffee').addEventListener('click', () => track('drink-click')); }
   $('thanksclose').addEventListener('click', () => { $('thanks').hidden = true; });
+  $('beer').addEventListener('click', () => { $('thankskick').textContent = 'Enjoying the map?'; $('thanks').hidden = false; $('thanksclose').focus(); track('drink-open'); });
   $('thanks').addEventListener('click', e => { if (e.target === $('thanks')) $('thanks').hidden = true; });
   $('thanksshare').addEventListener('click', async () => {
     if (navigator.share && coarse) { try { await navigator.share({ title: 'ADE 2026 by night', url: SITE }); } catch {} return; }

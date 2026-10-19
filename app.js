@@ -23,6 +23,8 @@ const coarse = matchMedia('(pointer: coarse)').matches;
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const mobile = () => innerWidth <= 820;
 const $ = id => document.getElementById(id);
+// Anonymous usage events for Umami (cookieless). No-op when the script is not loaded, as in the artifact viewer.
+const track = (name, data) => { try { window.umami && window.umami.track(name, data); } catch {} };
 
 // Amsterdam clock: which ADE day it is now, counting until 05:00 as the night before.
 function amsNow() {
@@ -371,9 +373,10 @@ async function main() {
   $('free').setAttribute('aria-pressed', S.free);
   $('days').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setDay(+b.dataset.d === S.day ? -1 : +b.dataset.d); });
   $('slots').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; S.slot = b.dataset.s; store.set('adem-slot', S.slot); press($('slots'), x => x === b); summary(); refresh(); });
-  $('views').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; S.view = b.dataset.v; store.set('adem-view', S.view); press($('views'), x => x === b); refresh(); });
+  $('views').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; S.view = b.dataset.v; store.set('adem-view', S.view); track('view', { view: S.view }); press($('views'), x => x === b); refresh(); });
   $('free').addEventListener('click', () => { S.free = !S.free; store.set('adem-free', S.free ? '1' : '0'); $('free').setAttribute('aria-pressed', S.free); summary(); refresh(); });
   function setDay(d) {
+    track('day', { day: d < 0 ? 'all' : DAYN[d] });
     S.day = d; store.set('adem-day', d); store.set('adem-day-set', '1');
     press($('days'), x => +x.dataset.d === d); summary(); refresh();
   }
@@ -429,6 +432,7 @@ async function main() {
   const countPlan = () => { $('plancount').textContent = plan.size; $('plancount').hidden = !plan.size; };
   function togglePlan(k) {
     plan.has(k) ? plan.delete(k) : plan.add(k);
+    if (plan.has(k)) { const hit = KEY.get(k); track('plan-add', { event: hit ? hit[0][5].slice(0, 80) : k }); }
     store.set('adem-plan', JSON.stringify([...plan]));
     countPlan();
     if (plan.has(k)) toast('Added to My plan');
@@ -490,6 +494,7 @@ async function main() {
     const b = e.target.closest('.planbtns button'); if (!b) return;
     const act = b.dataset.act;
     if (act === 'clear') { if (b.dataset.sure) { plan.clear(); store.set('adem-plan', '[]'); countPlan(); refresh(); } else { b.dataset.sure = 1; b.textContent = 'Tap again to clear'; } return; }
+    track('plan-' + act, { size: plan.size });
     if (act === 'share') {
       const url = SITE + '#plan=' + [...plan].join(',');
       if (navigator.share && coarse) { try { await navigator.share({ title: 'My ADE 2026 plan', url }); } catch {} return; }
@@ -510,7 +515,7 @@ async function main() {
     } catch (err) { console.error(err); toast('Could not save the plan. Try the other format.'); }
     b.disabled = false; b.textContent = label;
   });
-  if (COFFEE) { $('coffee').href = COFFEE; $('coffee').hidden = false; }
+  if (COFFEE) { $('coffee').href = COFFEE; $('coffee').hidden = false; $('coffee').addEventListener('click', () => track('drink-click')); }
   $('thanksclose').addEventListener('click', () => { $('thanks').hidden = true; });
   $('thanks').addEventListener('click', e => { if (e.target === $('thanks')) $('thanks').hidden = true; });
   $('thanksshare').addEventListener('click', async () => {
@@ -523,7 +528,10 @@ async function main() {
   });
   const qEl = $('q'), qClear = $('qclear');
   let qt = 0;
+  let qTrack = 0;
   function setQuery(text) {
+    clearTimeout(qTrack);
+    if (text.trim().length > 1) qTrack = setTimeout(() => track('search', { q: text.trim().toLowerCase().slice(0, 60) }), 1500);
     S.q = fold(text).split(/\s+/).filter(Boolean);
     qClear.hidden = !text;
     S.sel = -1;
@@ -557,6 +565,7 @@ async function main() {
     try { history.replaceState(null, '', '#' + h.toString()); } catch {}
   }
   $('share').addEventListener('click', async () => {
+    track('share-map');
     writeHash();
     const url = location.href, title = S.sel >= 0 ? `${V[S.sel].n} at ADE 2026` : 'ADE 2026 by night';
     if (navigator.share && coarse) { try { await navigator.share({ title, url }); } catch {} return; }
@@ -601,6 +610,7 @@ async function main() {
   }
   $('nav').addEventListener('click', e => { const b = e.target.closest('button[data-nav]'); if (b) nav(b.dataset.nav); });
   function select(i, fly) {
+    track('venue', { venue: V[i].n.slice(0, 80) });
     if (S.tab === 'plan') { S.tab = 'events'; document.querySelectorAll('#tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === 'events')); $('side').classList.remove('planmode'); }
     S.sel = i; refresh();
     if (fly) flyTo(V[i].x, V[i].z);

@@ -9,6 +9,17 @@
 <meta property="og:description" content="Unofficial free 3D night map of Amsterdam with every ADE 2026 venue glowing. Filter by day, time and free entry, search artists, venues and genres.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://radtech-solutions.github.io/ade-2026/">
+<meta property="og:image" content="https://radtech-solutions.github.io/ade-2026/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="3D night map of Amsterdam with ADE 2026 venues glowing">
+<meta property="og:site_name" content="RadTech">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="@radtech_nl">
+<meta name="twitter:image" content="https://radtech-solutions.github.io/ade-2026/og.png">
+<link rel="canonical" href="https://radtech-solutions.github.io/ade-2026/">
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "WebApplication", "name": "ADE 2026 by night", "url": "https://radtech-solutions.github.io/ade-2026/", "description": "Unofficial free 3D night map of Amsterdam with every ADE 2026 venue glowing. Filter by day, time and free entry, search artists, venues and genres.", "applicationCategory": "TravelApplication", "operatingSystem": "Any", "isAccessibleForFree": true, "offers": {"@type": "Offer", "price": "0", "priceCurrency": "EUR"}, "creator": {"@type": "Organization", "name": "RadTech", "url": "https://radtech.nl/"}, "about": {"@type": "Event", "name": "Amsterdam Dance Event 2026", "startDate": "2026-10-21", "endDate": "2026-10-25", "location": {"@type": "Place", "name": "Amsterdam", "address": {"@type": "PostalAddress", "addressLocality": "Amsterdam", "addressCountry": "NL"}}}}</script>
+<script defer src="https://cloud.umami.is/script.js" data-website-id="1aaef309-a6a8-4825-a2a9-b28d96b36334" data-domains="radtech-solutions.github.io" data-tag="ade2026"></script>
 <meta name="theme-color" content="#0B0D12">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' data:image/svg+xml,class='squiggle' viewBox='0 0 220 96' aria-hidden='true'><path d='M18 6 C 70 6, 120 18, 112 44 C 104 70, 40 58, 64 34 C 84 16, 150 40, 168 84' /><path class='hd' d='M152 74 L 169 88 L 176 67' /></svg>">
 <link rel="stylesheet" href="fonts/fonts.css">
@@ -164,6 +175,8 @@ a{color:var(--ink-2)}
 #badge a.rt b{color:var(--ink);font-weight:700}
 #badge a.rt .heart{color:#FF6B7A}
 #badge svg{width:18px;height:18px;display:block}
+#badge .hits{height:30px;display:flex;align-items:center;padding:0 8px;background:var(--panel);border:1px solid var(--rule)}
+#badge .hits img{height:18px;display:block}
 #infobtn{width:32px;height:32px;padding:0;border:1px solid var(--rule);background:var(--panel);font-family:Georgia,serif;font-size:15px;font-style:italic;text-transform:none;letter-spacing:0;color:var(--ink)}
 
 #nav{right:calc(max(12px,env(safe-area-inset-right,0px)) + 384px);bottom:calc(12px + env(safe-area-inset-bottom,0px));display:flex;gap:8px;padding:8px;align-items:center}
@@ -222,6 +235,7 @@ a{color:var(--ink-2)}
 <div id="badge">
   <button id="infobtn" type="button" aria-expanded="false" aria-controls="info" aria-label="About this map">i</button>
   <a class="rt" href="https://radtech.nl" target="_blank" rel="noopener"><rt-logo mode="beat" size="18" aria-hidden="true"></rt-logo><span>Built with <span class="heart">&#9829;</span> by <b>RadTech</b></span></a>
+  <a class="hits" href="https://hits.sh/radtech-solutions.github.io/ade-2026/" target="_blank" rel="noopener" title="Anonymous visit counter"><img src="https://hits.sh/radtech-solutions.github.io/ade-2026.svg?label=visits&amp;color=5FDDCF&amp;labelColor=0B1322&amp;style=flat-square" alt="Visit counter"></a>
 </div>
 
 <div id="info" class="ui" hidden>
@@ -231,7 +245,7 @@ a{color:var(--ink-2)}
   <p>An unofficial, free fan project. Not affiliated with or endorsed by Amsterdam Dance Event. Event data comes from the public ADE program, pulled 19 October 2026. Times and lineups change, and some events sell out, so always check the event page before you go. ADE publishes no prices, so paid events show none.</p>
   <p>Late events starting after midnight are listed under the night they belong to (a 02:00 start on Thursday shows under Wednesday, marked Thu).</p>
   <p>Buildings: <a href="https://github.com/alexbarakov/amsterdam-by-building" target="_blank" rel="noopener">Amsterdam, building by building</a> by Alex Barakov (MIT licence), from <a href="https://3dbag.nl" target="_blank" rel="noopener">3D BAG</a> by TU Delft (CC BY 4.0), BAG and BGT (CC0) and Gemeente Amsterdam open data. Addresses geocoded with PDOK. Rendering by three.js.</p>
-  <p>Made by <a href="https://radtech.nl" target="_blank" rel="noopener">RadTech</a>. Spotted a wrong venue or time? Tell us at radtech.nl. Enjoying it? <a href="https://bunq.me/RadTech" target="_blank" rel="noopener">Buy us a drink</a>.</p>
+  <p>Visits are counted anonymously with Umami and hits.sh, with no cookies. Made by <a href="https://radtech.nl" target="_blank" rel="noopener">RadTech</a>. Spotted a wrong venue or time? Tell us at radtech.nl. Enjoying it? <a href="https://bunq.me/RadTech" target="_blank" rel="noopener">Buy us a drink</a>.</p>
 </div>
 
 <aside id="side" class="ui" aria-label="Events">

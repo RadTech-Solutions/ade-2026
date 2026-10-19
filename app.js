@@ -6,7 +6,7 @@ import { MapControls } from './vendor/MapControls.js';
 const ROOT = document.documentElement;
 const FMT = ROOT.dataset.fmt || 'b64';            // 'gz' on GitHub Pages, 'b64' inside the artifact viewer
 const GUIDE = ROOT.dataset.guide || '';
-const SKY = '#0B0D12', LAND = '#12151C', WATER = '#0A1722';
+const SKY = '#0B0D12', LAND = '#15181F', WATER = '#123049';
 const FREE = new THREE.Color('#FFCB4D'), PAID = new THREE.Color('#5EC8F2');
 const DAYN = ['Wed 21', 'Thu 22', 'Fri 23', 'Sat 24', 'Sun 25'];
 const DAYL = ['Wednesday 21', 'Thursday 22', 'Friday 23', 'Saturday 24', 'Sunday 25'];
@@ -69,17 +69,24 @@ async function main() {
   const camera = new THREE.PerspectiveCamera(35, 1, 5, 60000);
   const controls = new MapControls(camera, canvas);
   controls.enableDamping = true;
-  controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
+  // Like Google Maps: drag moves the map, right drag (or Ctrl/Shift drag) turns and tilts, the wheel zooms toward the cursor.
+  controls.mouseButtons = { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE };
+  controls.zoomToCursor = true;
+  controls.screenSpacePanning = false;
   controls.rotateSpeed = 0.6;
+  controls.listenToKeyEvents(window);
+  controls.keyPanSpeed = 60;
   controls.maxPolarAngle = Math.PI * 0.47;
   controls.minDistance = 60;
   controls.maxDistance = 30000;
   let dirty = true, busyUntil = 0;
   const wake = (sec = 0) => { dirty = true; busyUntil = Math.max(busyUntil, performance.now() + sec * 1000); };
   controls.addEventListener('change', () => wake());
-  const az = THREE.MathUtils.degToRad(200), el = THREE.MathUtils.degToRad(46), dist = mobile() ? 5200 : 4300;
-  controls.target.set(0, 0, 250);
-  camera.position.set(dist * Math.cos(el) * Math.sin(az), dist * Math.sin(el), 250 + dist * Math.cos(el) * Math.cos(az));
+  const HOME = (() => {
+    const az = THREE.MathUtils.degToRad(200), el = THREE.MathUtils.degToRad(46), d = mobile() ? 5200 : 4300;
+    return { t: new THREE.Vector3(0, 0, 250), p: new THREE.Vector3(d * Math.cos(el) * Math.sin(az), d * Math.sin(el), 250 + d * Math.cos(el) * Math.cos(az)) };
+  })();
+  controls.target.copy(HOME.t); camera.position.copy(HOME.p);
   controls.update();
 
   async function loadPolygons(name) {
@@ -350,7 +357,7 @@ async function main() {
   function summary() { $('sumtext').textContent = `${DAYN[S.day]} · ${SLOTS.find(s => s[0] === S.slot)[1]}${S.free ? ' · Free only' : ''}`; }
   summary();
   $('filtertoggle').addEventListener('click', () => { const open = $('bar').classList.toggle('open'); $('filtertoggle').setAttribute('aria-expanded', open); });
-  $('hint').textContent = coarse ? 'Drag to move · two fingers to turn and zoom · tap a glow' : 'Drag to turn · right drag to move · scroll to zoom · click a glow';
+  $('hint').textContent = coarse ? 'Drag to move · pinch to zoom · two fingers to turn · tap a glow' : 'Drag to move · right drag to turn and tilt · scroll to zoom · arrow keys pan · click a glow';
   if (GUIDE) { $('guidelink').href = GUIDE; $('guidelink').hidden = false; }
   $('infobtn').addEventListener('click', () => { const o = $('info').hidden; $('info').hidden = !o; $('infobtn').setAttribute('aria-expanded', o); });
   $('infoclose').addEventListener('click', () => { $('info').hidden = true; $('infobtn').setAttribute('aria-expanded', false); });
@@ -448,15 +455,39 @@ async function main() {
 
   // ---------- picking and camera flights ----------
   let flight = null;
+  function moveTo(t, p, speed = 0.06) { flight = { t: 0, speed, fromT: controls.target.clone(), toT: t, fromP: camera.position.clone(), toP: p }; wake(); }
   function flyTo(x, z) {
     const dir = camera.position.clone().sub(controls.target).normalize();
     const d = Math.min(camera.position.distanceTo(controls.target), 1500);
     const tgt = new THREE.Vector3(x, 0, z);
     // On phones the list covers the bottom of the screen, so aim a little past the venue to lift it into view.
     if (mobile()) tgt.add(new THREE.Vector3(dir.x, 0, dir.z).normalize().multiplyScalar(d * 0.22));
-    flight = { t: 0, fromT: controls.target.clone(), toT: tgt, fromP: camera.position.clone(), toP: tgt.clone().add(dir.multiplyScalar(d)) };
-    wake();
+    moveTo(tgt, tgt.clone().add(dir.multiplyScalar(d)), 0.03);
   }
+  // On-screen controls: pan by a fifth of the view, zoom by 1.6x, turn by 30 degrees, flip between top-down and tilted.
+  function nav(a) {
+    // Chain onto a flight that is still running, so a quick click after selecting a venue does not undo the fly-to.
+    const baseT = flight ? flight.toT : controls.target, baseP = flight ? flight.toP : camera.position;
+    const off = baseP.clone().sub(baseT), d = off.length();
+    const fwd = new THREE.Vector3(-off.x, 0, -off.z).normalize(), right = new THREE.Vector3().crossVectors(fwd, new THREE.Vector3(0, 1, 0));
+    const step = d * 0.2, t = baseT.clone();
+    if (a === 'up') t.addScaledVector(fwd, step);
+    if (a === 'down') t.addScaledVector(fwd, -step);
+    if (a === 'left') t.addScaledVector(right, -step);
+    if (a === 'right') t.addScaledVector(right, step);
+    if (['up', 'down', 'left', 'right'].includes(a)) return moveTo(t, t.clone().add(off));
+    if (a === 'in' || a === 'out') {
+      const nd = THREE.MathUtils.clamp(d * (a === 'in' ? 0.62 : 1.6), controls.minDistance, controls.maxDistance);
+      return moveTo(t, t.clone().add(off.setLength(nd)));
+    }
+    const sph = new THREE.Spherical().setFromVector3(off);
+    if (a === 'rotl' || a === 'rotr') sph.theta += (a === 'rotl' ? 1 : -1) * Math.PI / 6;
+    if (a === 'tilt') sph.phi = sph.phi > 0.25 ? 0.02 : THREE.MathUtils.degToRad(44);
+    if (a === 'north') sph.theta = THREE.MathUtils.degToRad(180);
+    if (a === 'home') return moveTo(HOME.t.clone(), HOME.p.clone(), 0.04);
+    moveTo(t, t.clone().add(new THREE.Vector3().setFromSpherical(sph)));
+  }
+  $('nav').addEventListener('click', e => { const b = e.target.closest('button[data-nav]'); if (b) nav(b.dataset.nav); });
   function select(i, fly) {
     S.sel = i; refresh();
     if (fly) flyTo(V[i].x, V[i].z);
@@ -506,7 +537,7 @@ async function main() {
     const now = performance.now();
     uniforms.uNow.value = now / 1000;
     if (flight) {
-      flight.t = Math.min(flight.t + (reduce ? 1 : 0.03), 1);
+      flight.t = Math.min(flight.t + (reduce ? 1 : flight.speed), 1);
       const k = flight.t * flight.t * (3 - 2 * flight.t);
       controls.target.lerpVectors(flight.fromT, flight.toT, k);
       camera.position.lerpVectors(flight.fromP, flight.toP, k);

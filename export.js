@@ -1,8 +1,8 @@
-// Draws a saved ADE plan as one A4 page in the RadTech print style (cream paper, navy ink, teal and amber),
+// Draws a saved ADE plan as one A4 page in the RadTech dark style (navy page, cream ink, teal and amber glows),
 // and wraps it in a single-page PDF without any library.
 const W = 2480, H = 3508, M = 170;                 // A4 at 300 dpi
-const C = { paper: '#F4EEE0', ink: '#15212E', dim: 'rgba(21,33,46,.70)', faint: 'rgba(21,33,46,.45)', line: 'rgba(21,33,46,.16)',
-  teal: '#137F75', tealDeep: '#0C5F57', amber: '#B07321', navy: '#0B1322', cream: '#ECE7DA', mint: '#5FDDCF', gold: '#E6A85C' };
+const C = { paper: '#0B1322', ink: '#ECE7DA', dim: 'rgba(236,231,218,.72)', faint: 'rgba(236,231,218,.48)', line: 'rgba(236,231,218,.14)',
+  teal: '#5FDDCF', tealDeep: '#5FDDCF', amber: '#E6A85C', navy: '#0E1A2B', cream: '#ECE7DA', mint: '#5FDDCF', gold: '#E6A85C', onTeal: '#07131F' };
 const F = { display: '"Space Grotesk", "Archivo", system-ui, sans-serif', serif: '"Instrument Serif", Georgia, serif',
   body: '"IBM Plex Sans", "Archivo", system-ui, sans-serif', mono: '"JetBrains Mono", ui-monospace, monospace' };
 const DAYL = ['Wednesday 21 October', 'Thursday 22 October', 'Friday 23 October', 'Saturday 24 October', 'Sunday 25 October'];
@@ -16,6 +16,7 @@ async function fonts() {
 
 function logo(ctx, x, y, s) {
   ctx.fillStyle = C.navy; round(ctx, x, y, s, s, s * 0.17); ctx.fill();
+  ctx.strokeStyle = 'rgba(236,231,218,.18)'; ctx.lineWidth = Math.max(2, s * 0.02); ctx.stroke();
   const cell = s * 0.2, gap = s * 0.06, o = s * 0.14;
   const col = [C.mint, 'rgba(236,231,218,.45)', C.gold, 'rgba(236,231,218,.45)', C.mint, 'rgba(236,231,218,.45)', C.gold, 'rgba(236,231,218,.45)', C.mint];
   for (let i = 0; i < 9; i++) {
@@ -69,6 +70,12 @@ export async function renderPlan(items, meta) {
   const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
   const ctx = cv.getContext('2d');
   ctx.fillStyle = C.paper; ctx.fillRect(0, 0, W, H);
+  const glow = (x, y, r, col) => { const g = ctx.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, col); g.addColorStop(1, 'rgba(11,19,34,0)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H); };
+  glow(W * 0.92, H * 0.04, 1500, 'rgba(95,221,207,.20)');
+  glow(W * 0.02, H * 0.62, 1400, 'rgba(230,168,92,.12)');
+  glow(W * 0.85, H * 0.98, 1100, 'rgba(95,221,207,.10)');
+  ctx.fillStyle = 'rgba(236,231,218,.045)';
+  for (let y = 60; y < H; y += 72) for (let x = 60; x < W; x += 72) { ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2); ctx.fill(); }
   ctx.textBaseline = 'top';
 
   // Header: logo, kicker, title with the serif accent word, summary.
@@ -85,7 +92,9 @@ export async function renderPlan(items, meta) {
   const free = items.filter(i => i.free === 'FREE').length, dset = [...new Set(items.map(i => i.day))];
   ctx.fillStyle = C.dim; ctx.font = `400 46px ${F.body}`;
   ctx.fillText(`${items.length} event${items.length === 1 ? '' : 's'}  ·  ${free} free  ·  ${dset.map(d => DAYS[d]).join(', ')}`, M, M + 430);
-  ctx.fillStyle = C.ink; ctx.fillRect(M, M + 520, W - 2 * M, 4);
+  const rule = ctx.createLinearGradient(M, 0, W - M, 0);
+  rule.addColorStop(0, C.teal); rule.addColorStop(0.5, 'rgba(236,231,218,.5)'); rule.addColorStop(1, C.amber);
+  ctx.fillStyle = rule; ctx.fillRect(M, M + 520, W - 2 * M, 4);
 
   // Body: try one column, then two, then shrink.
   const byDay = new Map();
@@ -120,7 +129,7 @@ export async function renderPlan(items, meta) {
       ctx.font = `500 ${26 * s}px ${F.mono}`;
       const tw = ctx.measureText(it.free).width + 24 * s;
       ctx.fillStyle = C.teal; round(ctx, tx, yy + 12 * s, tw, 40 * s, 6 * s); ctx.fill();
-      ctx.fillStyle = C.paper; ctx.fillText(it.free, tx + 12 * s, yy + 20 * s);
+      ctx.fillStyle = C.onTeal; ctx.fillText(it.free, tx + 12 * s, yy + 20 * s);
       tx += tw + 16 * s;
     }
     if (it.clash) { ctx.fillStyle = C.amber; ctx.font = `500 ${28 * s}px ${F.mono}`; ctx.fillText('OVERLAPS PREVIOUS', tx, yy + 20 * s); }
@@ -133,7 +142,7 @@ export async function renderPlan(items, meta) {
 
   // Footer: RadTech mark, site, map link, disclaimer.
   const fy = H - 250;
-  ctx.fillStyle = C.ink; ctx.fillRect(M, fy, W - 2 * M, 3);
+  ctx.fillStyle = rule; ctx.fillRect(M, fy, W - 2 * M, 3);
   logo(ctx, M, fy + 50, 80);
   ctx.fillStyle = C.ink; ctx.font = `500 44px ${F.display}`;
   ctx.fillText('Made by RadTech', M + 110, fy + 52);

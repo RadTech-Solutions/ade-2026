@@ -6,6 +6,8 @@ import { MapControls } from './vendor/MapControls.js';
 const ROOT = document.documentElement;
 const FMT = ROOT.dataset.fmt || 'b64';            // 'gz' on GitHub Pages, 'b64' inside the artifact viewer
 const GUIDE = ROOT.dataset.guide || '';
+const COFFEE = ROOT.dataset.coffee || '';
+const SITE = ROOT.dataset.site || 'https://radtech-solutions.github.io/ade-2026/';
 const SKY = '#0B0D12', LAND = '#15181F', WATER = '#123049';
 const FREE = new THREE.Color('#FFCB4D'), PAID = new THREE.Color('#5EC8F2');
 const DAYN = ['Wed 21', 'Thu 22', 'Fri 23', 'Sat 24', 'Sun 25'];
@@ -195,7 +197,13 @@ async function main() {
     return m >= 1320;
   };
   const qMatch = (v, e) => !S.q.length || S.q.every(w => e[9].includes(w) || v.s.includes(w));
-  const evFor = v => v.ev.filter(e => e[0] === S.day && inSlot(e) && (!S.free || e[3]) && qMatch(v, e));
+  // My plan: events saved in this browser, keyed by ADE event id and night.
+  const pid = e => e[6].split('/').pop() + '@' + e[0];
+  const KEY = new Map();
+  V.forEach((v, i) => v.ev.forEach(e => KEY.set(pid(e), [e, i])));
+  const plan = new Set((() => { try { return JSON.parse(store.get('adem-plan') || '[]'); } catch { return []; } })().filter(k => KEY.has(k)));
+  S.tab = 'events';
+  const evFor = v => S.tab === 'plan' ? v.ev.filter(e => plan.has(pid(e))) : v.ev.filter(e => e[0] === S.day && inSlot(e) && (!S.free || e[3]) && qMatch(v, e));
 
   // ---------- venue markers ----------
   const beamGeo = new THREE.CylinderGeometry(1, 1, 1, 14, 1, true); beamGeo.translate(0, 0.5, 0);
@@ -366,9 +374,49 @@ async function main() {
   const head = $('sidehead'), list = $('list'), status = $('status');
   const freeTag = x => x[3] === 1 ? '<span class="free">FREE</span>' : x[3] === 2 ? '<span class="free soft" title="The organiser says free entry">FREE?</span>' : '';
   const when = x => `${hm(x[1])}${x[1] >= 1440 ? `<small class="nx">${DAYN[x[0] + 1] ? DAYN[x[0] + 1].slice(0, 3) : 'Mon'}</small>` : ''}<small>${x[2] ? 'to ' + x[2] : ''}</small>`;
+  const addBtn = x => { const k = pid(x), on = plan.has(k); return `<button type="button" class="add" data-k="${k}" aria-pressed="${on}" aria-label="${on ? 'Remove from' : 'Add to'} my plan" title="${on ? 'Remove from' : 'Add to'} my plan">${on ? '&#10003;' : '+'}</button>`; };
   const row = (x, v, i, showVenue) => `<div class="item" style="--c:${KINDC[x[4]]}"><div class="t">${when(x)}</div><div>
     <p class="n"><a href="${ADE + x[6]}/" target="_blank" rel="noopener">${esc(x[5])}</a></p>
-    <div class="m">${freeTag(x)}<span class="k">${KINDL[x[4]]}</span>${showVenue ? `<button type="button" class="vlink" data-i="${i}">${esc(v.vn[x[10]] || v.n)}</button>${v.d ? `<span>${esc(v.d)}</span>` : ''}` : (v.vn.length > 1 ? `<span>${esc(v.vn[x[10]])}</span>` : '')}${x[7] ? '<span class="pick">ADE pick</span>' : ''}</div></div></div>`;
+    <div class="m">${freeTag(x)}<span class="k">${KINDL[x[4]]}</span>${showVenue ? `<button type="button" class="vlink" data-i="${i}">${esc(v.vn[x[10]] || v.n)}</button>${v.d ? `<span>${esc(v.d)}</span>` : ''}` : (v.vn.length > 1 ? `<span>${esc(v.vn[x[10]])}</span>` : '')}${x[7] ? '<span class="pick">ADE pick</span>' : ''}</div></div>${addBtn(x)}</div>`;
+  function planItems() {
+    const out = [...plan].map(k => KEY.get(k)).filter(Boolean).map(([e, i]) => ({ e, i, v: V[i] }))
+      .sort((a, b) => a.e[0] - b.e[0] || a.e[1] - b.e[1]);
+    // Flag a clash only between normal-length events; all-day markets and exhibitions overlap everything by design.
+    const short = e => endMin(e) - e[1] <= 360;
+    let day = -1, lastEnd = -1;
+    for (const it of out) {
+      if (it.e[0] !== day) { day = it.e[0]; lastEnd = -1; }
+      it.clash = short(it.e) && it.e[1] < lastEnd;
+      if (short(it.e)) lastEnd = Math.max(lastEnd, endMin(it.e));
+    }
+    return out;
+  }
+  function planPanel() {
+    const items = planItems(), free = items.filter(x => x.e[3]).length;
+    head.innerHTML = `<h2>My plan</h2><div class="sub"><span>${items.length} saved</span><span class="fc">${free} free</span><span>kept in this browser</span></div>
+      ${items.length ? `<div class="planbtns"><button type="button" data-act="png">Save as image</button><button type="button" data-act="pdf">Save as PDF</button><button type="button" data-act="share">Share plan</button><button type="button" data-act="clear">Clear</button></div>` : ''}`;
+    if (!items.length) { list.innerHTML = `<p class="empty">Tap <b>+</b> next to any event to add it here. Then save your plan as one A4 page (image or PDF) or share it as a link. Nothing leaves your browser.</p>`; status.textContent = 'Plan is empty'; return; }
+    let html = '', day = -1;
+    for (const it of items) {
+      if (it.e[0] !== day) { day = it.e[0]; html += `<h3 class="dayh">${DAYL[day]} Oct</h3>`; }
+      html += row(it.e, it.v, it.i, true).replace('<div class="m">', `<div class="m">${it.clash ? '<span class="clash">Overlaps previous</span>' : ''}`);
+    }
+    list.innerHTML = html;
+    status.textContent = `${items.length} events in your plan`;
+  }
+  function setTab(t) {
+    S.tab = t; S.sel = -1;
+    document.querySelectorAll('#tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === t));
+    $('side').classList.toggle('planmode', t === 'plan');
+    refresh();
+  }
+  const countPlan = () => { $('plancount').textContent = plan.size; $('plancount').hidden = !plan.size; };
+  function togglePlan(k) {
+    plan.has(k) ? plan.delete(k) : plan.add(k);
+    store.set('adem-plan', JSON.stringify([...plan]));
+    countPlan();
+    if (plan.has(k)) toast('Added to My plan');
+  }
   function otherDays() {
     if (S.slot === 'now') return '';
     const n = [0, 0, 0, 0, 0];
@@ -378,6 +426,7 @@ async function main() {
   }
   const slotLabel = () => S.slot === 'all' ? '' : ', ' + SLOTS.find(s => s[0] === S.slot)[1].toLowerCase();
   function panel() {
+    if (S.tab === 'plan') return planPanel();
     if (S.sel >= 0) {
       const v = V[S.sel], e = evFor(v);
       head.innerHTML = `<button class="back" type="button" id="back">${S.q.length ? 'Back to results' : 'All places'}</button><h2>${esc(v.vn.length > 1 ? v.vn.join(' · ') : v.n)}</h2>
@@ -407,7 +456,50 @@ async function main() {
       : `<p class="empty">${S.slot === 'now' ? 'Nothing listed as running right now. Try Night or All day.' : 'Nothing in this slot. Try another time of day or switch off Free only.'}</p>`;
     status.textContent = `${total} events at ${vs.length} places`;
   }
-  list.addEventListener('click', e => { const b = e.target.closest('.vbtn, .vlink'); if (b) select(+b.dataset.i, true); });
+  list.addEventListener('click', e => {
+    const a = e.target.closest('.add');
+    if (a) {
+      togglePlan(a.dataset.k);
+      if (S.tab === 'plan') { refresh(); return; }
+      const on = plan.has(a.dataset.k);
+      a.setAttribute('aria-pressed', on); a.innerHTML = on ? '&#10003;' : '+';
+      a.setAttribute('aria-label', (on ? 'Remove from' : 'Add to') + ' my plan');
+      return;
+    }
+    const b = e.target.closest('.vbtn, .vlink'); if (b) select(+b.dataset.i, true);
+  });
+  $('tabs').addEventListener('click', e => { const b = e.target.closest('button[data-tab]'); if (b) setTab(b.dataset.tab); });
+  head.addEventListener('click', async e => {
+    const b = e.target.closest('.planbtns button'); if (!b) return;
+    const act = b.dataset.act;
+    if (act === 'clear') { if (b.dataset.sure) { plan.clear(); store.set('adem-plan', '[]'); countPlan(); refresh(); } else { b.dataset.sure = 1; b.textContent = 'Tap again to clear'; } return; }
+    if (act === 'share') {
+      const url = SITE + '#plan=' + [...plan].join(',');
+      if (navigator.share && coarse) { try { await navigator.share({ title: 'My ADE 2026 plan', url }); } catch {} return; }
+      try { await navigator.clipboard.writeText(url); toast('Plan link copied'); } catch { toast(url); }
+      return;
+    }
+    b.disabled = true; const label = b.textContent; b.textContent = 'Drawing…';
+    try {
+      const { renderPlan, canvasToPdf } = await import('./export.js');
+      const items = planItems().map(({ e, v, clash }) => ({ day: e[0], start: e[1], end: e[2], title: e[5], venue: v.vn[e[10]] || v.n, address: v.a, district: v.d, free: e[3] === 1 ? 'FREE' : e[3] === 2 ? 'FREE?' : '', clash }));
+      const cv = await renderPlan(items, { site: SITE });
+      const blob = act === 'pdf' ? await canvasToPdf(cv) : await new Promise(r => cv.toBlob(r, 'image/png'));
+      const name = `my-ade-2026-plan.${act === 'pdf' ? 'pdf' : 'png'}`;
+      const file = new File([blob], name, { type: blob.type });
+      if (coarse && navigator.canShare && navigator.canShare({ files: [file] })) { try { await navigator.share({ files: [file], title: 'My ADE 2026 plan' }); } catch {} }
+      else { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000); }
+      setTimeout(() => { $('thanks').hidden = false; $('thanksclose').focus(); }, 700);
+    } catch (err) { console.error(err); toast('Could not save the plan. Try the other format.'); }
+    b.disabled = false; b.textContent = label;
+  });
+  if (COFFEE) { $('coffee').href = COFFEE; $('coffee').hidden = false; }
+  $('thanksclose').addEventListener('click', () => { $('thanks').hidden = true; });
+  $('thanks').addEventListener('click', e => { if (e.target === $('thanks')) $('thanks').hidden = true; });
+  $('thanksshare').addEventListener('click', async () => {
+    if (navigator.share && coarse) { try { await navigator.share({ title: 'ADE 2026 by night', url: SITE }); } catch {} return; }
+    try { await navigator.clipboard.writeText(SITE); toast('Map link copied'); } catch { toast(SITE); }
+  });
   head.addEventListener('click', e => {
     if (e.target.closest('#back')) { S.sel = -1; refresh(); return; }
     const b = e.target.closest('.dayjump'); if (b) setDay(+b.dataset.d);
@@ -424,6 +516,7 @@ async function main() {
   qClear.addEventListener('click', () => { qEl.value = ''; setQuery(''); qEl.focus(); });
   addEventListener('keydown', e => {
     if (e.key !== 'Escape') return;
+    if (!$('thanks').hidden) { $('thanks').hidden = true; return; }
     if (document.activeElement === qEl && qEl.value) { qEl.value = ''; setQuery(''); }
     else if (S.sel >= 0) { S.sel = -1; refresh(); }
   });
@@ -437,8 +530,10 @@ async function main() {
     if (h.has('f')) S.free = h.get('f') === '1';
     if (h.has('q')) S.qText = h.get('q');
     if (h.has('p') && V[+h.get('p')]) S.sel = +h.get('p');
+    if (h.has('plan')) S.planIn = h.get('plan').split(',');
   }
   function writeHash() {
+    if (S.tab === 'plan') { try { history.replaceState(null, '', '#plan=' + [...plan].join(',')); } catch {} return; }
     const h = new URLSearchParams({ d: S.day, t: S.slot, v: S.view, f: S.free ? 1 : 0 });
     if (qEl.value) h.set('q', qEl.value);
     if (S.sel >= 0) h.set('p', S.sel);
@@ -489,6 +584,7 @@ async function main() {
   }
   $('nav').addEventListener('click', e => { const b = e.target.closest('button[data-nav]'); if (b) nav(b.dataset.nav); });
   function select(i, fly) {
+    if (S.tab === 'plan') { S.tab = 'events'; document.querySelectorAll('#tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === 'events')); $('side').classList.remove('planmode'); }
     S.sel = i; refresh();
     if (fly) flyTo(V[i].x, V[i].z);
     if (mobile()) { $('side').classList.remove('full'); $('sheetbtn').textContent = 'Expand'; }
@@ -528,6 +624,15 @@ async function main() {
     renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); wake();
   }
   addEventListener('resize', resize); resize();
+  countPlan();
+  if (S.planIn) {
+    let n = 0;
+    for (const k of S.planIn) if (KEY.has(k) && !plan.has(k)) { plan.add(k); n++; }
+    store.set('adem-plan', JSON.stringify([...plan])); countPlan();
+    S.tab = 'plan'; $('side').classList.add('planmode');
+    document.querySelectorAll('#tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === 'plan'));
+    setTimeout(() => toast(n ? `Added ${n} shared event${n === 1 ? '' : 's'} to My plan` : 'Shared plan opened'), 400);
+  }
   if (S.qText) { qEl.value = S.qText; S.q = fold(S.qText).split(/\s+/).filter(Boolean); qClear.hidden = false; }
   refresh();
   if (S.sel >= 0) flyTo(V[S.sel].x, V[S.sel].z);

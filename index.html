@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-fmt="gz" data-guide="guide/">
+<html lang="en" data-fmt="gz" data-guide="guide/" data-site="https://radtech-solutions.github.io/ade-2026/">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -66,6 +66,32 @@ a{color:var(--ink-2)}
 .back{justify-self:start;padding:6px 9px;border:1px solid var(--rule);background:transparent}
 .other{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
 .other button{padding:6px 8px;border:1px solid var(--rule);background:transparent;color:var(--free)}
+#tabs{display:flex;gap:0;margin:10px 14px 0;border:1px solid var(--rule)}
+#tabs button{flex:1;padding:9px 8px;border:0;background:transparent;color:var(--ink-3)}
+#tabs button+button{border-left:1px solid var(--rule)}
+#tabs button[aria-selected="true"]{background:var(--ink);color:var(--night)}
+#plancount{display:inline-block;min-width:18px;padding:2px 5px;margin-left:4px;background:var(--free);color:#14110A;font-weight:700}
+#side.planmode .searchbox{display:none}
+.planbtns{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.planbtns button{padding:8px 10px;border:1px solid var(--rule);background:transparent;color:var(--ink)}
+.planbtns button[data-act="png"],.planbtns button[data-act="pdf"]{border-color:var(--free);color:var(--free)}
+.planbtns button:disabled{opacity:.5}
+.dayh{margin:14px 0 0;font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--free);font-weight:500}
+.clash{color:#FF9F6B}
+.item{grid-template-columns:3.6rem 1fr auto!important}
+.add{align-self:start;width:32px;height:32px;padding:0;border:1px solid var(--rule);background:transparent;color:var(--ink);font-family:var(--sans);font-size:18px;letter-spacing:0;display:grid;place-items:center}
+.add:hover{border-color:var(--free);color:var(--free)}
+.add[aria-pressed="true"]{background:var(--free);border-color:var(--free);color:#14110A;font-size:15px}
+#thanks{position:fixed;inset:0;z-index:20;background:rgba(5,7,10,.66);display:grid;place-items:center;padding:20px}
+#thanks .box{max-width:420px;background:#0B1322;border:1px solid rgba(236,231,218,.2);padding:26px 24px 20px;color:#ECE7DA;display:grid;gap:12px}
+#thanks svg{width:44px;height:44px}
+#thanks h2{margin:0;font-family:var(--sans);font-size:1.35rem;line-height:1.2;letter-spacing:-.01em}
+#thanks p{margin:0;line-height:1.5;color:rgba(236,231,218,.78);font-size:.95rem}
+#thanks .acts{display:flex;flex-wrap:wrap;gap:8px}
+#thanks .acts a,#thanks .acts button{padding:11px 13px;border:1px solid rgba(236,231,218,.25);background:transparent;color:#ECE7DA;font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;text-decoration:none;line-height:1}
+#thanks .acts .primary{background:#5FDDCF;border-color:#5FDDCF;color:#07131F;font-weight:700}
+#thanks small{font-family:var(--mono);font-size:10px;letter-spacing:.06em;color:rgba(236,231,218,.6)}
+#thanks small a{color:#ECE7DA}
 #list{overflow:auto;flex:1;min-height:0;padding:2px 14px 14px;overscroll-behavior:contain}
 .item{display:grid;grid-template-columns:3.6rem 1fr;gap:0 10px;padding:10px 0;border-bottom:1px solid var(--rule)}
 .item .t{font-family:var(--mono);font-size:12px;color:var(--ink);font-variant-numeric:tabular-nums;border-left:3px solid var(--c);padding-left:7px;line-height:1.3}
@@ -181,6 +207,7 @@ a{color:var(--ink-2)}
 
 <aside id="side" class="ui" aria-label="Events">
   <div class="searchbox"><input id="q" type="search" placeholder="Search artist, venue, genre, area" aria-label="Search events" autocomplete="off" spellcheck="false" enterkeyhint="search"><button id="qclear" type="button" hidden aria-label="Clear search">Clear</button><button id="sheetbtn" type="button" aria-expanded="false">Expand</button></div>
+  <div id="tabs" role="tablist"><button type="button" role="tab" data-tab="events" aria-selected="true">Events</button><button type="button" role="tab" data-tab="plan" aria-selected="false">My plan <span id="plancount" hidden>0</span></button></div>
   <header id="sidehead"></header>
   <div id="status" aria-live="polite"></div>
   <div id="list"></div>
@@ -204,6 +231,15 @@ a{color:var(--ink-2)}
   <div class="col">
     <button type="button" data-nav="tilt" aria-label="Switch between 2D and 3D" title="2D / 3D">3D</button>
     <button type="button" data-nav="north" aria-label="Face north" title="Face north">N</button>
+  </div>
+</div>
+<div id="thanks" hidden role="dialog" aria-modal="true" aria-labelledby="thankst">
+  <div class="box">
+    <svg viewBox="0 0 200 200" aria-hidden="true"><rect width="200" height="200" rx="34" fill="#0B1322"/><g transform="translate(28 28)"><rect x="0" y="0" width="40" height="40" rx="8" fill="#5FDDCF"/><rect x="52" y="0" width="40" height="40" rx="8" fill="#ECE7DA" fill-opacity=".45"/><rect x="104" y="0" width="40" height="40" rx="8" fill="#E6A85C"/><rect x="0" y="52" width="40" height="40" rx="8" fill="#ECE7DA" fill-opacity=".45"/><rect x="52" y="52" width="40" height="40" rx="8" fill="#5FDDCF"/><rect x="104" y="52" width="40" height="40" rx="8" fill="#ECE7DA" fill-opacity=".45"/><rect x="0" y="104" width="40" height="40" rx="8" fill="#E6A85C"/><rect x="52" y="104" width="40" height="40" rx="8" fill="#ECE7DA" fill-opacity=".45"/><rect x="104" y="104" width="40" height="40" rx="8" fill="#5FDDCF"/></g></svg>
+    <h2 id="thankst">Your plan is saved. Have a great ADE.</h2>
+    <p>This map is free and made in our spare time. If it helped you find a good night, a coffee keeps the next one coming.</p>
+    <div class="acts"><a id="coffee" class="primary" hidden target="_blank" rel="noopener">&#9749; Buy us a coffee</a><button id="thanksshare" type="button">Share the map</button><button id="thanksclose" type="button">Close</button></div>
+    <small>Made by <a href="https://radtech.nl" target="_blank" rel="noopener">RadTech</a></small>
   </div>
 </div>
 <div id="tip" hidden></div>

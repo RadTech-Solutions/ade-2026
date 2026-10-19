@@ -383,12 +383,26 @@ async function main() {
   const dayName = () => S.day < 0 ? 'All days' : DAYN[S.day];
   function summary() { $('sumtext').textContent = `${dayName()} · ${SLOTS.find(s => s[0] === S.slot)[1]}${S.free ? ' · Free only' : ''}`; }
   summary();
-  $('filtertoggle').addEventListener('click', () => { const open = $('bar').classList.toggle('open'); $('filtertoggle').setAttribute('aria-expanded', open); });
+  // Phones: the filter panel and the list sheet both get out of the way of the map on demand.
+  function setFilters(open) {
+    $('bar').classList.toggle('open', open); document.body.classList.toggle('filters-open', open);
+    $('filtertoggle').setAttribute('aria-expanded', open);
+  }
+  function setSheet(state) {
+    S.sheet = state;
+    document.body.classList.toggle('sheet-peek', state === 'peek');
+    document.body.classList.toggle('sheet-full', state === 'full');
+    $('sheetbtn').textContent = state === 'peek' ? 'Show list' : 'Show map';
+    wake(0.3);
+  }
+  S.sheet = 'half';
+  $('filtertoggle').addEventListener('click', () => setFilters(!$('bar').classList.contains('open')));
+  $('filtersdone').addEventListener('click', () => { setFilters(false); setSheet('peek'); });
   $('hint').textContent = coarse ? 'Drag to move · pinch to zoom · two fingers to turn · tap a glow' : 'Drag to move · right drag to turn and tilt · scroll to zoom · arrow keys pan · click a glow';
   if (GUIDE) { $('guidelink').href = GUIDE; $('guidelink').hidden = false; }
   $('infobtn').addEventListener('click', () => { const o = $('info').hidden; $('info').hidden = !o; $('infobtn').setAttribute('aria-expanded', o); });
   $('infoclose').addEventListener('click', () => { $('info').hidden = true; $('infobtn').setAttribute('aria-expanded', false); });
-  $('sheetbtn').addEventListener('click', () => { const o = $('side').classList.toggle('full'); $('sheetbtn').setAttribute('aria-expanded', o); $('sheetbtn').textContent = o ? 'Collapse' : 'Expand'; });
+  $('sheetbtn').addEventListener('click', () => { setFilters(false); setSheet(S.sheet === 'peek' ? 'full' : 'peek'); });
 
   const head = $('sidehead'), list = $('list'), status = $('status');
   const freeTag = x => x[3] === 1 ? '<span class="free">FREE</span>' : x[3] === 2 ? '<span class="free soft" title="The organiser says free entry">FREE?</span>' : '';
@@ -491,7 +505,7 @@ async function main() {
     }
     const b = e.target.closest('.vbtn, .vlink'); if (b) select(+b.dataset.i, true);
   });
-  $('tabs').addEventListener('click', e => { const b = e.target.closest('button[data-tab]'); if (b) setTab(b.dataset.tab); });
+  $('tabs').addEventListener('click', e => { const b = e.target.closest('button[data-tab]'); if (b) { setTab(b.dataset.tab); if (mobile() && S.sheet === 'peek') setSheet('half'); } });
   head.addEventListener('click', async e => {
     const xo = e.target.closest('#xlayout button');
     if (xo) {
@@ -546,6 +560,7 @@ async function main() {
     S.sel = -1;
     refresh();
   }
+  qEl.addEventListener('focus', () => { if (mobile() && S.sheet === 'peek') setSheet('half'); });
   qEl.addEventListener('input', () => { clearTimeout(qt); qt = setTimeout(() => setQuery(qEl.value), 140); });
   qClear.addEventListener('click', () => { qEl.value = ''; setQuery(''); qEl.focus(); });
   addEventListener('keydown', e => {
@@ -591,7 +606,7 @@ async function main() {
     const d = Math.min(camera.position.distanceTo(controls.target), 1500);
     const tgt = new THREE.Vector3(x, 0, z);
     // On phones the list covers the bottom of the screen, so aim a little past the venue to lift it into view.
-    if (mobile()) tgt.add(new THREE.Vector3(dir.x, 0, dir.z).normalize().multiplyScalar(d * 0.22));
+    if (mobile()) tgt.add(new THREE.Vector3(dir.x, 0, dir.z).normalize().multiplyScalar(d * 0.12));
     moveTo(tgt, tgt.clone().add(dir.multiplyScalar(d)), 0.03);
   }
   // On-screen controls: pan by a fifth of the view, zoom by 1.6x, turn by 30 degrees, flip between top-down and tilted.
@@ -623,7 +638,7 @@ async function main() {
     if (S.tab === 'plan') { S.tab = 'events'; document.querySelectorAll('#tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === 'events')); $('side').classList.remove('planmode'); }
     S.sel = i; refresh();
     if (fly) flyTo(V[i].x, V[i].z);
-    if (mobile()) { $('side').classList.remove('full'); $('sheetbtn').textContent = 'Expand'; }
+    if (mobile()) { setFilters(false); qEl.blur(); setSheet('peek'); }
   }
   const ray = new THREE.Raycaster(), ptr = new THREE.Vector2(), tip = $('tip');
   function pick(cx, cy) {

@@ -72,7 +72,7 @@ a{color:var(--ink-2)}
 #q::placeholder{color:var(--ink-3)}
 #q:focus{outline:2px solid var(--accent);outline-offset:-1px}
 #qclear,#sheetbtn{padding:0 10px;border:1px solid var(--rule);background:transparent}
-#sheetbtn{display:none}
+#sheetbtn,#filtersdone{display:none}
 #sidehead{padding:10px 14px 10px;border-bottom:1px solid var(--rule);display:grid;gap:5px}
 #side h2{margin:0;font-size:1.1rem;font-weight:800;letter-spacing:-.01em;line-height:1.2;overflow-wrap:anywhere}
 #side .sub{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);display:flex;gap:4px 10px;flex-wrap:wrap}
@@ -201,16 +201,22 @@ a{color:var(--ink-2)}
   #sumtext{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   #filtertoggle::after{content:"\25BE";font-size:10px}
   #bar:not(.open) .filters{display:none}
-  #side{top:auto;left:max(8px,env(safe-area-inset-left,0px));right:max(8px,env(safe-area-inset-right,0px));bottom:calc(8px + env(safe-area-inset-bottom,0px));width:auto;height:40vh;height:40dvh;transition:height .2s}
-  #side.full{height:78vh;height:78dvh}
-  #sheetbtn{display:inline-block}
-  #nav{right:max(10px,env(safe-area-inset-right,0px));bottom:calc(40vh + 18px + env(safe-area-inset-bottom,0px));bottom:calc(40dvh + 18px + env(safe-area-inset-bottom,0px));padding:5px;gap:5px;flex-direction:column;align-items:stretch}
+  /* Phone list sheet: half by default, a small strip in map mode, tall in list mode. Controls ride on top of it. */
+  body{--sh:40vh;--sh:40dvh}
+  body.sheet-peek{--sh:168px}
+  body.sheet-full{--sh:80vh;--sh:80dvh}
+  #side{top:auto;left:max(8px,env(safe-area-inset-left,0px));right:max(8px,env(safe-area-inset-right,0px));bottom:calc(8px + env(safe-area-inset-bottom,0px));width:auto;height:var(--sh);transition:height .2s}
+  #sheetbtn{display:inline-block;white-space:nowrap;border-color:var(--free);color:var(--free)}
+  body.sheet-peek #sidehead .sub,body.sheet-peek #tabs{display:none}
+  #nav{right:max(10px,env(safe-area-inset-right,0px));bottom:calc(var(--sh) + 18px + env(safe-area-inset-bottom,0px));padding:5px;gap:5px;flex-direction:column;align-items:stretch}
+  body.sheet-full #nav,body.sheet-full #badge,body.filters-open #nav,body.filters-open #badge{display:none}
+  #filtersdone{display:block;width:100%;padding:12px;border:1px solid var(--free);background:var(--free);color:#14110A;font-weight:700;margin-top:4px}
   #nav .pad{display:none}
   #nav .col{grid-template-columns:repeat(2,36px)}
   #nav button{width:36px;height:36px}
-  #side.full ~ #nav{display:none}
-  #badge{bottom:calc(40vh + 18px + env(safe-area-inset-bottom,0px));bottom:calc(40dvh + 18px + env(safe-area-inset-bottom,0px));left:50%}
+  #badge{bottom:calc(var(--sh) + 18px + env(safe-area-inset-bottom,0px));left:50%}
   #badge a.rt{padding:5px 8px 5px 6px;font-size:9.5px}
+  #badge .hits{display:none}
   #info{bottom:auto;top:calc(110px + env(safe-area-inset-top,0px));left:max(10px,env(safe-area-inset-left,0px));right:max(10px,env(safe-area-inset-right,0px));max-width:none;max-height:calc(60dvh - 130px)}
 }
 @media (prefers-reduced-motion:reduce){#side{transition:none}}
@@ -232,6 +238,7 @@ a{color:var(--ink-2)}
     <div class="row"><div class="seg" id="days" role="group" aria-label="Day"></div><button id="free" type="button" aria-pressed="false">Free only</button></div>
     <div class="row"><div class="seg" id="slots" role="group" aria-label="Time of day"></div><div class="seg small" id="views" role="group" aria-label="Map style"></div></div>
     <div class="legend"><span><i style="background:var(--free)"></i>Free events</span><span><i style="background:var(--paid)"></i>Paid only</span><span class="lg">Bigger glow, more events</span></div>
+    <button id="filtersdone" type="button">Show map</button>
   </div>
 </div>
 
@@ -253,7 +260,7 @@ a{color:var(--ink-2)}
 </div>
 
 <aside id="side" class="ui" aria-label="Events">
-  <div class="searchbox"><input id="q" type="search" placeholder="Search artist, venue, genre, area" aria-label="Search events" autocomplete="off" spellcheck="false" enterkeyhint="search"><button id="qclear" type="button" hidden aria-label="Clear search">Clear</button><button id="sheetbtn" type="button" aria-expanded="false">Expand</button></div>
+  <div class="searchbox"><input id="q" type="search" placeholder="Search artist, venue, genre, area" aria-label="Search events" autocomplete="off" spellcheck="false" enterkeyhint="search"><button id="qclear" type="button" hidden aria-label="Clear search">Clear</button><button id="sheetbtn" type="button">Show map</button></div>
   <div id="tabs" role="tablist"><button type="button" role="tab" data-tab="events" aria-selected="true">Events</button><button type="button" role="tab" data-tab="plan" aria-selected="false">My plan <span id="plancount" hidden>0</span></button></div>
   <header id="sidehead"></header>
   <div id="status" aria-live="polite"></div>

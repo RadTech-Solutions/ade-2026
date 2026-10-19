@@ -257,7 +257,21 @@ async function main() {
   V.forEach((v, i) => v.ev.forEach(e => KEY.set(pid(e), [e, i])));
   const plan = new Set((() => { try { return JSON.parse(store.get('adem-plan') || '[]'); } catch { return []; } })().filter(k => KEY.has(k)));
   S.tab = 'events';
-  const evFor = v => S.tab === 'plan' ? v.ev.filter(e => plan.has(pid(e))) : v.ev.filter(e => (S.day < 0 || e[0] === S.day) && inSlot(e) && (!S.free || e[3]) && qMatch(v, e));
+  // Genres: ADE's tree flattened; picking a parent also picks all its sub-genres. Events match any picked genre.
+  const TAX = ade.tax || [], GNAMES = [], GPARENT = [];
+  TAX.forEach(([g, subs]) => { const gi = GNAMES.length; GNAMES.push(g); GPARENT.push(-1); subs.forEach(sb => { GNAMES.push(sb); GPARENT.push(gi); }); });
+  S.genres = new Set((S.genresIn ?? store.get('adem-genres') ?? '').split(',').filter(x => x !== '' && GNAMES[+x] !== undefined).map(Number));
+  S.hideSold = S.hideSoldIn ?? (store.get('adem-hidesold') === '1');
+  let gWant = null;
+  const genreSet = () => {
+    if (gWant) return gWant;
+    gWant = new Set();
+    for (const g of S.genres) { gWant.add(g); if (GPARENT[g] === -1) GNAMES.forEach((_, i) => { if (GPARENT[i] === g) gWant.add(i); }); }
+    return gWant;
+  };
+  const genreOk = e => !S.genres.size || e[12].some(g => genreSet().has(g));
+  const baseOk = (v, e) => inSlot(e) && (!S.free || e[3]) && (!S.hideSold || !e[11]) && genreOk(e) && qMatch(v, e);
+  const evFor = v => S.tab === 'plan' ? v.ev.filter(e => plan.has(pid(e))) : v.ev.filter(e => (S.day < 0 || e[0] === S.day) && baseOk(v, e));
 
   // ---------- venue markers ----------
   const beamGeo = new THREE.CylinderGeometry(1, 1, 1, 14, 1, true); beamGeo.translate(0, 0.5, 0);
@@ -427,13 +441,46 @@ async function main() {
   $('slots').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; S.slot = b.dataset.s; store.set('adem-slot', S.slot); press($('slots'), x => x === b); summary(); refresh(); });
   $('views').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; S.view = b.dataset.v; store.set('adem-view', S.view); track('view', { view: S.view }); press($('views'), x => x === b); refresh(); });
   $('free').addEventListener('click', () => { S.free = !S.free; store.set('adem-free', S.free ? '1' : '0'); $('free').setAttribute('aria-pressed', S.free); summary(); refresh(); });
+  $('nosold').setAttribute('aria-pressed', S.hideSold);
+  $('nosold').addEventListener('click', () => { S.hideSold = !S.hideSold; store.set('adem-hidesold', S.hideSold ? '1' : '0'); $('nosold').setAttribute('aria-pressed', S.hideSold); track('hide-sold', { on: S.hideSold }); refresh(); });
+  // Genre picker: counts are events across the whole programme, so the list reads the same whatever day is picked.
+  const gCount = GNAMES.map(() => 0);
+  V.forEach(v => v.ev.forEach(e => e[12].forEach(g => { gCount[g]++; })));
+  function drawGenres() {
+    let html = '';
+    TAX.forEach(([g, subs]) => {
+      const gi = GNAMES.indexOf(g);
+      html += `<section><button type="button" class="gpar" data-g="${gi}" aria-pressed="${S.genres.has(gi)}">${esc(g)} <em>${gCount[gi]}</em></button><div class="gsubs">` +
+        subs.map(sb => { const i = GNAMES.indexOf(sb, gi); return gCount[i] ? `<button type="button" data-g="${i}" aria-pressed="${S.genres.has(i) || S.genres.has(gi)}">${esc(sb)} <em>${gCount[i]}</em></button>` : ''; }).join('') + `</div></section>`;
+    });
+    $('glist').innerHTML = html;
+    $('gsel').textContent = S.genres.size ? [...S.genres].map(i => GNAMES[i]).join(', ') : 'No genre picked: showing everything';
+  }
+  function setGenres() { gWant = null; store.set('adem-genres', [...S.genres].join(',')); summary(); refresh(); drawGenres(); }
+  $('genrebtn').addEventListener('click', () => { drawGenres(); $('genres').hidden = false; });
+  $('gdone').addEventListener('click', () => { $('genres').hidden = true; if (mobile()) { setFilters(false); } });
+  $('gclear').addEventListener('click', () => { S.genres.clear(); setGenres(); });
+  $('glist').addEventListener('click', e => {
+    const b = e.target.closest('button[data-g]'); if (!b) return;
+    const i = +b.dataset.g, par = GPARENT[i];
+    if (par !== -1 && S.genres.has(par)) {            // un-ticking one sub-genre of a fully picked group
+      S.genres.delete(par); GNAMES.forEach((_, j) => { if (GPARENT[j] === par && j !== i && gCount[j]) S.genres.add(j); });
+    } else if (S.genres.has(i)) S.genres.delete(i);
+    else { S.genres.add(i); if (par === -1) GNAMES.forEach((_, j) => { if (GPARENT[j] === i) S.genres.delete(j); }); }
+    track('genre', { genre: GNAMES[i] });
+    setGenres();
+  });
   function setDay(d) {
     track('day', { day: d < 0 ? 'all' : DAYN[d] });
     S.day = d; store.set('adem-day', d); store.set('adem-day-set', '1');
     press($('days'), x => +x.dataset.d === d); summary(); refresh();
   }
   const dayName = () => S.day < 0 ? 'All days' : DAYN[S.day];
-  function summary() { $('sumtext').textContent = `${dayName()} · ${SLOTS.find(s => s[0] === S.slot)[1]}${S.free ? ' · Free only' : ''}`; }
+  function summary() {
+    $('sumtext').textContent = `${dayName()} · ${SLOTS.find(s => s[0] === S.slot)[1]}${S.free ? ' · Free only' : ''}${S.genres.size ? ' · ' + S.genres.size + ' genre' + (S.genres.size > 1 ? 's' : '') : ''}`;
+    $('gcount').textContent = S.genres.size || ''; $('gcount').hidden = !S.genres.size;
+    $('genrebtn').setAttribute('aria-pressed', S.genres.size > 0);
+  }
   summary();
   // Phones: the filter panel and the list sheet both get out of the way of the map on demand.
   function setFilters(open) {
@@ -461,8 +508,8 @@ async function main() {
   const when = x => `${hm(x[1])}${x[1] >= 1440 ? `<small class="nx">${DAYN[x[0] + 1] ? DAYN[x[0] + 1].slice(0, 3) : 'Mon'}</small>` : ''}<small>${x[2] ? 'to ' + x[2] : ''}</small>`;
   const addBtn = x => { const k = pid(x), on = plan.has(k); return `<button type="button" class="add" data-k="${k}" aria-pressed="${on}" aria-label="${on ? 'Remove from' : 'Add to'} my plan" title="${on ? 'Remove from' : 'Add to'} my plan">${on ? '&#10003;' : '+'}</button>`; };
   const row = (x, v, i, showVenue) => `<div class="item" style="--c:${KINDC[x[4]]}"><div class="t">${when(x)}</div><div>
-    <p class="n"><a href="${ADE + x[6]}/" target="_blank" rel="noopener">${esc(x[5])}</a></p>
-    <div class="m">${S.day < 0 && S.tab !== 'plan' ? `<span class="dy">${DAYN[x[0]]}</span>` : ''}${freeTag(x)}<span class="k">${KINDL[x[4]]}</span>${showVenue ? `<button type="button" class="vlink" data-i="${i}">${esc(v.vn[x[10]] || v.n)}</button>${v.d ? `<span>${esc(v.d)}</span>` : ''}` : (v.vn.length > 1 ? `<span>${esc(v.vn[x[10]])}</span>` : '')}${x[7] ? '<span class="pick">ADE pick</span>' : ''}</div></div>${addBtn(x)}</div>`;
+    <p class="n"><a href="${ADE + x[6]}/" target="_blank" rel="noopener">${esc(x[5])}</a></p>${x[13] ? `<p class="lu">${esc(x[13])}</p>` : ''}
+    <div class="m">${S.day < 0 && S.tab !== 'plan' ? `<span class="dy">${DAYN[x[0]]}</span>` : ''}${x[11] ? `<span class="so">SOLD OUT</span><a class="resale" href="https://www.ticketswap.com/search?query=${encodeURIComponent(x[5])}" target="_blank" rel="noopener">Resale &#8599;</a>` : ''}${freeTag(x)}<span class="k">${KINDL[x[4]]}</span>${showVenue ? `<button type="button" class="vlink" data-i="${i}">${esc(v.vn[x[10]] || v.n)}</button>${v.d ? `<span>${esc(v.d)}</span>` : ''}` : (v.vn.length > 1 ? `<span>${esc(v.vn[x[10]])}</span>` : '')}${x[7] ? '<span class="pick">ADE pick</span>' : ''}</div></div>${addBtn(x)}</div>`;
   function planItems() {
     const out = [...plan].map(k => KEY.get(k)).filter(Boolean).map(([e, i]) => ({ e, i, v: V[i] }))
       .sort((a, b) => a.e[0] - b.e[0] || a.e[1] - b.e[1]);
@@ -509,7 +556,7 @@ async function main() {
     if (S.slot === 'now') return '';
     const n = [0, 0, 0, 0, 0];
     if (S.day < 0) return '';
-    for (const v of V) for (const e of v.ev) if (e[0] !== S.day && inSlot(e) && (!S.free || e[3]) && qMatch(v, e)) n[e[0]]++;
+    for (const v of V) for (const e of v.ev) if (e[0] !== S.day && baseOk(v, e)) n[e[0]]++;
     const days = n.map((c, d) => [c, d]).filter(([c]) => c);
     return days.length ? `<div class="other">Also on ${days.map(([c, d]) => `<button type="button" class="dayjump" data-d="${d}">${DAYN[d]} (${c})</button>`).join('')}</div>` : '';
   }
@@ -637,6 +684,8 @@ async function main() {
     if (h.has('t') && SLOTS.some(s => s[0] === h.get('t'))) S.slot = h.get('t');
     if (h.has('v') && VIEWS.some(s => s[0] === h.get('v'))) S.view = h.get('v');
     if (h.has('f')) S.free = h.get('f') === '1';
+    if (h.has('g')) S.genresIn = h.get('g');
+    if (h.has('h')) S.hideSoldIn = h.get('h') === '1';
     if (h.has('q')) S.qText = h.get('q');
     if (h.has('p') && V[+h.get('p')]) S.sel = +h.get('p');
     if (h.has('plan')) S.planIn = h.get('plan').split(',');
@@ -644,6 +693,8 @@ async function main() {
   function writeHash() {
     if (S.tab === 'plan') { try { history.replaceState(null, '', '#plan=' + [...plan].join(',')); } catch {} return; }
     const h = new URLSearchParams({ d: S.day, t: S.slot, v: S.view, f: S.free ? 1 : 0 });
+    if (S.genres.size) h.set('g', [...S.genres].join(','));
+    if (S.hideSold) h.set('h', 1);
     if (qEl.value) h.set('q', qEl.value);
     if (S.sel >= 0) h.set('p', S.sel);
     try { history.replaceState(null, '', '#' + h.toString()); } catch {}

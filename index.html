@@ -85,6 +85,26 @@ a{color:var(--ink-2)}
 #tabs button+button{border-left:1px solid var(--rule)}
 #tabs button[aria-selected="true"]{background:var(--ink);color:var(--night)}
 .item .m .dy{color:var(--ink);font-weight:700}
+/* genre picker, sold out, lineups */
+.pill{padding:7px 10px;border:1px solid var(--rule);background:transparent;font-size:10px}
+.pill[aria-pressed="true"]{background:var(--ink);color:var(--night);border-color:var(--ink)}
+#gcount{display:inline-block;min-width:16px;padding:1px 4px;margin-left:4px;background:var(--free);color:#14110A;font-weight:700}
+#genres{left:max(12px,env(safe-area-inset-left,0px));top:calc(12px + env(safe-area-inset-top,0px));bottom:calc(12px + env(safe-area-inset-bottom,0px));width:min(560px,calc(100% - 420px));z-index:8;display:flex;flex-direction:column;background:rgba(11,13,18,.96)}
+.ghead{display:flex;align-items:center;gap:8px;padding:14px 16px 6px}
+.ghead h3{margin:0;flex:1;font-size:1.15rem;font-weight:800}
+.ghead button{padding:8px 12px;border:1px solid var(--rule);background:transparent}
+#gdone{background:var(--free);border-color:var(--free);color:#14110A;font-weight:700}
+#gsel{margin:0;padding:0 16px 10px;font-family:var(--mono);font-size:10.5px;letter-spacing:.04em;color:var(--ink-3);border-bottom:1px solid var(--rule)}
+#glist{overflow:auto;padding:6px 16px 18px;overscroll-behavior:contain}
+#glist section{padding:10px 0;border-bottom:1px solid var(--rule)}
+#glist button{padding:7px 9px;margin:0 6px 6px 0;border:1px solid var(--rule);background:transparent;color:var(--ink-2);font-size:10px}
+#glist button em{font-style:normal;color:var(--ink-3);margin-left:3px}
+#glist button[aria-pressed="true"]{background:var(--free);border-color:var(--free);color:#14110A}
+#glist button[aria-pressed="true"] em{color:#14110A}
+#glist .gpar{display:block;margin-bottom:8px;font-weight:700;color:var(--ink);font-size:11px}
+.item .lu{margin:3px 0 0;font-size:.82rem;line-height:1.3;color:var(--ink-2);overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.so{background:#FF4D6D;color:#14110A;font-weight:700;padding:1px 4px}
+.resale{color:#FF8FA3;text-decoration:underline;text-underline-offset:2px}
 #plancount{display:inline-block;min-width:18px;padding:2px 5px;margin-left:4px;background:var(--free);color:#14110A;font-weight:700}
 #side.planmode .searchbox{display:none}
 .xopts{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:4px}.xopts>span{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);margin-right:2px}
@@ -207,6 +227,8 @@ a{color:var(--ink-2)}
   body.sheet-full{--sh:80vh;--sh:80dvh}
   #side{top:auto;left:max(8px,env(safe-area-inset-left,0px));right:max(8px,env(safe-area-inset-right,0px));bottom:calc(8px + env(safe-area-inset-bottom,0px));width:auto;height:var(--sh);transition:height .2s}
   #sheetbtn{display:inline-block;white-space:nowrap;border-color:var(--free);color:var(--free)}
+  #genres{left:max(8px,env(safe-area-inset-left,0px));right:max(8px,env(safe-area-inset-right,0px));width:auto;top:calc(8px + env(safe-area-inset-top,0px));bottom:calc(8px + env(safe-area-inset-bottom,0px));z-index:12}
+  #glist button{padding:10px 11px}
   body.sheet-peek #sidehead .sub,body.sheet-peek #tabs{display:none}
   #nav{right:max(10px,env(safe-area-inset-right,0px));bottom:calc(var(--sh) + 18px + env(safe-area-inset-bottom,0px));padding:5px;gap:5px;flex-direction:column;align-items:stretch}
   body.sheet-full #nav,body.sheet-full #badge,body.filters-open #nav,body.filters-open #badge{display:none}
@@ -236,6 +258,7 @@ a{color:var(--ink-2)}
   </div>
   <div class="filters" id="filters">
     <div class="row"><div class="seg" id="days" role="group" aria-label="Day"></div><button id="free" type="button" aria-pressed="false">Free only</button></div>
+    <div class="row"><button id="genrebtn" class="pill" type="button" aria-pressed="false">Genres <span id="gcount" hidden></span></button><button id="nosold" class="pill" type="button" aria-pressed="false">Hide sold out</button></div>
     <div class="row"><div class="seg" id="slots" role="group" aria-label="Time of day"></div><div class="seg small" id="views" role="group" aria-label="Map style"></div></div>
     <div class="legend"><span><i style="background:var(--free)"></i>Free events</span><span><i style="background:var(--paid)"></i>Paid only</span><span class="lg">Bigger glow, more events</span></div>
     <button id="filtersdone" type="button">Show map</button>
@@ -252,7 +275,7 @@ a{color:var(--ink-2)}
   <button id="infoclose" type="button">Close</button>
   <h3>About this map</h3>
   <p id="hint"></p>
-  <p>An unofficial, free fan project. Not affiliated with or endorsed by Amsterdam Dance Event. Event data comes from the public ADE program, pulled 19 October 2026. Times and lineups change, and some events sell out, so always check the event page before you go. ADE publishes no prices, so paid events show none.</p>
+  <p>An unofficial, free fan project. Not affiliated with or endorsed by Amsterdam Dance Event. Event data comes from the public ADE program, last pulled 19 October 2026 at 21:00, including which events are sold out. Sold-out events get a link to TicketSwap, ADE&#8217;s official resale partner; check listings there yourself. Times and lineups change, and some events sell out, so always check the event page before you go. ADE publishes no prices, so paid events show none.</p>
   <p class="legal">ADE and Amsterdam Dance Event are names of their owner, used here only to say which event this map covers. Everything is provided as is: listings come from public sources and can be wrong, change or be cancelled, and organisers and venues decide on entry. Your saved plan stays in your browser. Visit counts are anonymous and cookieless (Umami, hits.sh); hits.sh sees your IP address when it shows the counter.</p>
   <p>Late events starting after midnight are listed under the night they belong to (a 02:00 start on Thursday shows under Wednesday, marked Thu).</p>
   <p>Buildings: <a href="https://github.com/alexbarakov/amsterdam-by-building" target="_blank" rel="noopener">Amsterdam, building by building</a> by Alex Barakov (MIT licence), from <a href="https://3dbag.nl" target="_blank" rel="noopener">3D BAG</a> by TU Delft (CC BY 4.0), BAG and BGT (CC0) and Gemeente Amsterdam open data. Addresses geocoded with PDOK. Rendering by three.js.</p>
@@ -299,6 +322,11 @@ a{color:var(--ink-2)}
     <div class="acts"><button id="thanksshare" type="button">Send it to your crew</button><button id="thanksclose" type="button">Maybe later</button></div>
     <p class="made">Made with <span class="h">&#9829;</span> by <a href="https://radtech.nl" target="_blank" rel="noopener">RadTech</a></p>
   </div>
+</div>
+<div id="genres" class="ui" role="dialog" aria-label="Pick genres" hidden>
+  <div class="ghead"><h3>Genres</h3><button id="gclear" type="button">Clear</button><button id="gdone" type="button">Done</button></div>
+  <p id="gsel"></p>
+  <div id="glist"></div>
 </div>
 <div id="tip" hidden></div>
 <div id="toast" role="status" hidden></div>

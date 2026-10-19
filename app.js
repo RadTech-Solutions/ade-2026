@@ -220,6 +220,19 @@ async function main() {
   })();
   const add = { transparent: true, blending: THREE.AdditiveBlending, depthWrite: false };
   const markers = new THREE.Group(); scene.add(markers);
+  // Hot pink arrow that bobs above the selected venue, drawn on top so buildings never hide it.
+  // The renderer outputs linear values untouched, so give the pink in that space to land on #FF2E88 on screen.
+  const PINK = new THREE.Color().setRGB(1, 0.18, 0.53, THREE.LinearSRGBColorSpace);
+  const pinkMat = new THREE.MeshBasicMaterial({ color: PINK, depthTest: false, depthWrite: false, transparent: true });
+  const pinkSoft = new THREE.MeshBasicMaterial({ color: PINK, depthTest: false, depthWrite: false, transparent: true, opacity: 0.35, side: THREE.DoubleSide });
+  const arrow = new THREE.Group();
+  const tip3 = new THREE.Mesh(new THREE.ConeGeometry(1, 1.7, 28), pinkMat); tip3.rotation.x = Math.PI; tip3.position.y = 0.85;
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 2.2, 16), pinkMat); shaft.position.y = 2.75;
+  arrow.add(tip3, shaft);
+  const ring = new THREE.Mesh(new THREE.RingGeometry(0.78, 1, 48), pinkSoft); ring.rotation.x = -Math.PI / 2;
+  for (const m of [tip3, shaft, ring]) m.renderOrder = 999;
+  arrow.visible = ring.visible = false;
+  scene.add(arrow, ring);
   const hits = [];
   V.forEach((v, i) => {
     const g = new THREE.Group(); g.position.set(v.x, 0, v.z);
@@ -647,6 +660,19 @@ async function main() {
       controls.target.lerpVectors(flight.fromT, flight.toT, k);
       camera.position.lerpVectors(flight.fromP, flight.toP, k);
       if (flight.t >= 1) flight = null;
+      dirty = true;
+    }
+    const sv = S.sel >= 0 ? V[S.sel] : null;
+    arrow.visible = ring.visible = !!(sv && sv.g.visible);
+    if (arrow.visible) {
+      const sz = camera.position.distanceTo(controls.target) * 0.022, t = now / 1000;
+      const bob = reduce ? 0 : Math.abs(Math.sin(t * 3.2)) * 1.4;
+      arrow.scale.setScalar(sz);
+      arrow.position.set(sv.x, (sv.bh || 20) + sz * (0.6 + bob), sv.z);
+      ring.position.set(sv.x, 0.6, sv.z);
+      const pulse = reduce ? 1 : 1 + 0.35 * ((t * 1.2) % 1);
+      ring.scale.setScalar(Math.max(sv.bw || 20, 18) * 1.4 * pulse);
+      pinkSoft.opacity = reduce ? 0.35 : 0.45 * (1 - ((t * 1.2) % 1));
       dirty = true;
     }
     if (S.view === 'beams' && !reduce && !document.hidden) {

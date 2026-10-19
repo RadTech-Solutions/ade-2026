@@ -2,7 +2,7 @@
 
 An unofficial, free fan map and guide for Amsterdam Dance Event 2026 (21 to 25 October).
 
-- **Map:** https://radtech-solutions.github.io/ade-2026/ shows every Amsterdam building at night with ADE venues glowing. Filter by day, time of day and free entry, and search artists, venues, genres and districts.
+- **Map:** https://radtech.nl/ade2026 (or https://radtech-solutions.github.io/ade-2026/) shows every Amsterdam building at night with ADE venues glowing. Filter by day, time of day and free entry, and search artists, venues, genres and districts.
 - **Guide:** https://radtech-solutions.github.io/ade-2026/guide/ lists every event day by day, with the free ones marked and five suggested routes.
 
 Not affiliated with or endorsed by Amsterdam Dance Event. Event data comes from the public ADE program, pulled 19 October 2026. Always check the official event page before you go.

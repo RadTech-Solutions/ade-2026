@@ -177,6 +177,16 @@ a{color:var(--ink-2)}
 .empty{font-size:.92rem;line-height:1.45;color:var(--ink-2);padding:14px 0;margin:0}
 #status{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 
+#labels-layer{position:fixed;inset:0;z-index:2;pointer-events:none;overflow:hidden}
+.lbl{position:absolute;left:0;top:0;white-space:nowrap;will-change:transform;visibility:hidden}
+.lbl.area{font-family:var(--mono);font-size:12.5px;font-weight:500;letter-spacing:.3em;text-transform:uppercase;color:rgba(236,238,243,.88);text-shadow:0 0 4px #000,0 0 12px #000,0 0 22px rgba(0,0,0,.9)}
+.lbl.ven{pointer-events:auto;cursor:pointer;display:flex;align-items:center;gap:6px;padding:4px 8px 4px 6px;background:rgba(11,13,18,.78);border:1px solid rgba(236,238,243,.14);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);font-family:var(--sans);font-size:11.5px;font-weight:600;color:var(--ink);transition:opacity .25s}
+.lbl.ven:after{content:"";position:absolute;left:50%;bottom:-5px;width:1px;height:5px;background:rgba(236,238,243,.35)}
+.lbl.ven i{width:7px;height:7px;border-radius:50%;background:var(--paid);box-shadow:0 0 6px var(--paid);flex:none}
+.lbl.ven.free i{background:var(--free);box-shadow:0 0 6px var(--free)}
+.lbl.ven b{font-family:var(--mono);font-size:9.5px;font-weight:500;color:var(--ink-3)}
+.lbl.ven.sel{border-color:#FF2E88;background:rgba(40,10,24,.85)}
+.lbl.ven:hover{border-color:var(--ink-2)}
 #tip{position:fixed;z-index:6;pointer-events:none;background:var(--panel-solid);border:1px solid var(--rule);padding:6px 8px;font-family:var(--mono);font-size:10.5px;letter-spacing:.04em;color:var(--ink);max-width:240px}
 #tip span{color:var(--ink-3)}
 #toast{position:fixed;z-index:9;left:50%;transform:translateX(-50%);bottom:calc(24px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--night);font-family:var(--mono);font-size:11px;padding:9px 12px;max-width:calc(100% - 32px);overflow-wrap:anywhere}
@@ -200,6 +210,31 @@ a{color:var(--ink-2)}
 #badge svg{width:18px;height:18px;display:block}
 #badge .hits{height:30px;display:flex;align-items:center;padding:0 8px;background:var(--panel);border:1px solid var(--rule)}
 #badge .hits img{height:18px;display:block}
+#radio{position:relative;width:34px;height:32px;padding:0;border:1px solid var(--rule);background:var(--panel);font-size:16px;line-height:1;display:grid;place-items:center;letter-spacing:0;text-transform:none}
+#radio:hover,#radio[aria-expanded="true"]{border-color:var(--paid)}
+#radio .eq{display:none;gap:2px;align-items:flex-end;height:14px}
+#radio.on .ico{display:none}
+#radio.on .eq{display:flex}
+.eq i{width:3px;background:var(--paid);animation:eq 1s ease-in-out infinite;height:40%}
+.eq i:nth-child(2){animation-delay:-.35s}.eq i:nth-child(3){animation-delay:-.7s}
+@keyframes eq{0%,100%{height:25%}50%{height:100%}}
+#radiopanel{position:absolute;bottom:calc(100% + 10px);right:0;width:300px;max-width:calc(100vw - 24px);background:rgba(11,13,18,.96);border:1px solid var(--rule);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);padding:12px;display:grid;gap:10px;z-index:9}
+#radiopanel .rhead{display:flex;align-items:center;gap:8px;min-width:0}
+#radiopanel .rk{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--paid)}
+#radiopanel .rnow{flex:1;min-width:0;font-size:12px;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#rstop{width:26px;height:26px;padding:0;border:1px solid var(--rule);background:transparent;color:var(--ink);font-size:11px}
+#radiopanel .rlist{display:grid;gap:4px;max-height:46vh;overflow:auto}
+#radiopanel .rlist button{display:flex;align-items:center;gap:10px;width:100%;padding:8px 10px;border:1px solid var(--rule);background:transparent;text-align:left;text-transform:none;letter-spacing:0;font-family:var(--sans);font-size:13px;font-weight:600;color:var(--ink)}
+#radiopanel .rlist button:hover{border-color:var(--ink-3)}
+#radiopanel .rlist button[aria-pressed="true"]{border-color:var(--paid);background:rgba(94,200,242,.08)}
+#radiopanel .rlist .g{font-family:var(--mono);font-size:9.5px;font-weight:500;letter-spacing:.12em;text-transform:uppercase;color:var(--free);width:62px;flex:none}
+#radiopanel .rlist .n{flex:1;min-width:0}
+#radiopanel .rlist .n small{display:block;font-family:var(--mono);font-size:9.5px;font-weight:400;color:var(--ink-3);letter-spacing:.04em;margin-top:2px}
+#radiopanel .rlist .eq{display:none;gap:2px;align-items:flex-end;height:12px}
+#radiopanel .rlist button[aria-pressed="true"].live .eq{display:flex}
+#radiopanel .rfine{margin:0;font-size:10.5px;line-height:1.45;color:var(--ink-3)}
+#radiopanel .rfine a{color:var(--ink-2)}
+@media (prefers-reduced-motion:reduce){.eq i{animation:none;height:70%}}
 #beer{width:34px;height:32px;padding:0;border:1px solid var(--rule);background:var(--panel);font-size:17px;line-height:1;display:grid;place-items:center;letter-spacing:0;text-transform:none}
 #beer span{display:inline-block;transform-origin:50% 90%;animation:cheers 3.2s ease-in-out infinite}
 #beer:hover{border-color:var(--free)}
@@ -251,6 +286,7 @@ a{color:var(--ink-2)}
 </style>
 
 <canvas id="scene" aria-label="3D map of Amsterdam with ADE venues glowing"></canvas>
+<div id="labels-layer" aria-hidden="true" hidden></div>
 <div id="loading">Building the city <span id="progress">0</span>%</div>
 
 <div id="bar" class="ui">
@@ -264,7 +300,7 @@ a{color:var(--ink-2)}
   </div>
   <div class="filters" id="filters">
     <div class="row"><div class="seg" id="days" role="group" aria-label="Day"></div><button id="free" type="button" aria-pressed="false">Free only</button></div>
-    <div class="row"><button id="genrebtn" class="pill" type="button" aria-pressed="false">Genres <span id="gcount" hidden></span></button><button id="nosold" class="pill" type="button" aria-pressed="false">Hide sold out</button></div>
+    <div class="row"><button id="genrebtn" class="pill" type="button" aria-pressed="false">Genres <span id="gcount" hidden></span></button><button id="nosold" class="pill" type="button" aria-pressed="false">Hide sold out</button><button id="labelsbtn" class="pill" type="button" aria-pressed="false">Labels</button></div>
     <div class="row"><div class="seg" id="slots" role="group" aria-label="Time of day"></div><div class="seg small" id="views" role="group" aria-label="Map style"></div></div>
     <div class="legend"><span><i style="background:var(--free)"></i>Free events</span><span><i style="background:var(--paid)"></i>Paid only</span><span class="lg">Bigger glow, more events</span></div>
     <button id="filtersdone" type="button">Show map</button>
@@ -275,7 +311,13 @@ a{color:var(--ink-2)}
   <button id="infobtn" type="button" aria-expanded="false" aria-controls="info" aria-label="About this map">i</button>
   <a class="rt" href="https://radtech.nl" target="_blank" rel="noopener"><rt-logo mode="beat" size="18" aria-hidden="true"></rt-logo><span><span class="heart">&#9829;</span> by <b>RadTech</b> in <em class="city">Amsterdam</em></span><svg class="grachten" viewBox="0 0 46 27" aria-hidden="true"><path fill="#5FDDCF" d="M0 27V10h2V7h2V4h2V1.5h1V4h2v3h1v3h1v17z"/><path fill="#FFCB4D" d="M11 27V9q0-3 2.2-3 .6-4 2.8-4t2.8 4Q21 6 21 9v18z"/><path fill="#FF6BB5" d="M22 27V11h2V5h1.5V3.5h3V5H30v6h2v16z"/><g transform="rotate(8 38 27)"><path fill="#A98BFF" d="M33 27V9l5-6 5 6v18z"/></g><g fill="rgba(11,13,18,.72)"><rect x="2.0" y="13.0" width="2.4" height="2.8" rx=".4"/><rect x="5.6" y="13.0" width="2.4" height="2.8" rx=".4"/><rect x="2.0" y="17.2" width="2.4" height="2.8" rx=".4"/><rect x="5.6" y="17.2" width="2.4" height="2.8" rx=".4"/><rect x="2.0" y="21.4" width="2.4" height="2.8" rx=".4"/><rect x="5.6" y="21.4" width="2.4" height="2.8" rx=".4"/><rect x="13.0" y="13.0" width="2.4" height="2.8" rx=".4"/><rect x="16.6" y="13.0" width="2.4" height="2.8" rx=".4"/><rect x="13.0" y="17.2" width="2.4" height="2.8" rx=".4"/><rect x="16.6" y="17.2" width="2.4" height="2.8" rx=".4"/><rect x="13.0" y="21.4" width="2.4" height="2.8" rx=".4"/><rect x="16.6" y="21.4" width="2.4" height="2.8" rx=".4"/><rect x="24.0" y="13.0" width="2.4" height="2.8" rx=".4"/><rect x="27.6" y="13.0" width="2.4" height="2.8" rx=".4"/><rect x="24.0" y="17.2" width="2.4" height="2.8" rx=".4"/><rect x="27.6" y="17.2" width="2.4" height="2.8" rx=".4"/><rect x="24.0" y="21.4" width="2.4" height="2.8" rx=".4"/><rect x="27.6" y="21.4" width="2.4" height="2.8" rx=".4"/><g transform="rotate(8 38 27)"><rect x="35.0" y="13.0" width="2.4" height="2.8" rx=".4"/><rect x="38.6" y="13.0" width="2.4" height="2.8" rx=".4"/><rect x="35.0" y="17.2" width="2.4" height="2.8" rx=".4"/><rect x="38.6" y="17.2" width="2.4" height="2.8" rx=".4"/><rect x="35.0" y="21.4" width="2.4" height="2.8" rx=".4"/><rect x="38.6" y="21.4" width="2.4" height="2.8" rx=".4"/></g></g></svg></a>
   <a class="hits" href="https://hits.sh/radtech-solutions.github.io/ade-2026/" target="_blank" rel="noopener" title="Anonymous visit counter"><img src="https://hits.sh/radtech-solutions.github.io/ade-2026.svg?label=visits&amp;color=5FDDCF&amp;labelColor=0B1322&amp;style=flat-square" alt="Visit counter"></a>
+  <button id="radio" type="button" aria-label="Radio" title="Radio" aria-expanded="false" aria-controls="radiopanel"><span class="ico" aria-hidden="true">&#128251;</span><span class="eq" aria-hidden="true"><i></i><i></i><i></i></span></button>
   <button id="beer" type="button" aria-label="Buy us a drink" title="Buy us a drink"><span aria-hidden="true">&#127867;</span></button>
+  <div id="radiopanel" role="dialog" aria-label="Radio" hidden>
+    <div class="rhead"><span class="rk">Radio</span><span class="rnow" id="rnow">Pick a station</span><button id="rstop" type="button" aria-label="Stop" hidden>&#9632;</button></div>
+    <div class="rlist" id="rlist"></div>
+    <p class="rfine">Live public streams, played straight from each station. We don't host or own the music.</p>
+  </div>
 </div>
 
 <div id="info" class="ui" hidden>

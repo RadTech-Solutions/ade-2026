@@ -441,6 +441,7 @@ async function main() {
   $('slots').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; S.slot = b.dataset.s; store.set('adem-slot', S.slot); press($('slots'), x => x === b); summary(); refresh(); });
   $('views').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; S.view = b.dataset.v; store.set('adem-view', S.view); track('view', { view: S.view }); press($('views'), x => x === b); refresh(); });
   $('free').addEventListener('click', () => { S.free = !S.free; store.set('adem-free', S.free ? '1' : '0'); $('free').setAttribute('aria-pressed', S.free); summary(); refresh(); });
+  $('labelsbtn').addEventListener('click', () => { S.labels = !S.labels; store.set('adem-labels', S.labels ? '1' : '0'); $('labelsbtn').setAttribute('aria-pressed', S.labels); track('labels', { on: S.labels }); wake(); });
   $('nosold').setAttribute('aria-pressed', S.hideSold);
   $('nosold').addEventListener('click', () => { S.hideSold = !S.hideSold; store.set('adem-hidesold', S.hideSold ? '1' : '0'); $('nosold').setAttribute('aria-pressed', S.hideSold); track('hide-sold', { on: S.hideSold }); refresh(); });
   // Genre picker: counts are events across the whole programme, so the list reads the same whatever day is picked.
@@ -639,6 +640,37 @@ async function main() {
   });
   if (COFFEE) { $('coffee').href = COFFEE; $('coffee').hidden = false; $('coffee').addEventListener('click', () => track('drink-click')); }
   $('thanksclose').addEventListener('click', () => { $('thanks').hidden = true; });
+  // ---------- radio ----------
+  // Plays a station's own public stream through one <audio> element. Nothing loads until someone taps a station.
+  const RADIO = [];
+  const rBtn = $('radio'), rPanel = $('radiopanel'), rList = $('rlist'), rNow = $('rnow'), rStop = $('rstop');
+  let audio = null, rCur = -1;
+  rBtn.hidden = !RADIO.length;
+  rList.innerHTML = RADIO.map((r, i) => `<button type="button" data-r="${i}" aria-pressed="false"><span class="g">${esc(r.g)}</span><span class="n">${esc(r.n)}<small>${esc(r.by)}</small></span><span class="eq" aria-hidden="true"><i></i><i></i><i></i></span></button>`).join('');
+  const rSet = (msg, live) => {
+    rNow.textContent = msg; rBtn.classList.toggle('on', !!live); rStop.hidden = rCur < 0;
+    rList.querySelectorAll('button').forEach(b => { const on = +b.dataset.r === rCur; b.setAttribute('aria-pressed', on); b.classList.toggle('live', on && !!live); });
+  };
+  function rPlay(i) {
+    if (!audio) {
+      audio = new Audio(); audio.preload = 'none';
+      audio.addEventListener('playing', () => rCur >= 0 && rSet(RADIO[rCur].n, true));
+      audio.addEventListener('waiting', () => rCur >= 0 && rSet('Tuning in…', false));
+      audio.addEventListener('error', () => { if (rCur >= 0 && audio.getAttribute('src')) rSet(RADIO[rCur].n + ' is off air, try another', false); });
+    }
+    rCur = i; audio.src = RADIO[i].url; rSet('Tuning in…', false);
+    audio.play().catch(() => rSet(RADIO[i].n + ' is off air, try another', false));
+    store.set('adem-radio', RADIO[i].id); track('radio-play', { station: RADIO[i].id });
+  }
+  function rOff() {
+    // Dropping the source stops the download too, not just the sound.
+    if (audio) { audio.pause(); audio.removeAttribute('src'); audio.load(); }
+    rCur = -1; rSet('Pick a station', false);
+  }
+  rList.addEventListener('click', e => { const b = e.target.closest('button[data-r]'); if (!b) return; +b.dataset.r === rCur ? rOff() : rPlay(+b.dataset.r); });
+  rStop.addEventListener('click', rOff);
+  rBtn.addEventListener('click', () => { const open = rPanel.hidden; rPanel.hidden = !open; rBtn.setAttribute('aria-expanded', open); if (open) track('radio-open'); });
+  document.addEventListener('click', e => { if (!rPanel.hidden && !e.target.closest('#radiopanel,#radio')) { rPanel.hidden = true; rBtn.setAttribute('aria-expanded', false); } });
   $('beer').addEventListener('click', () => { $('thankskick').textContent = 'Enjoying the map?'; $('thanks').hidden = false; $('thanksclose').focus(); track('drink-open'); });
   $('thanks').addEventListener('click', e => { if (e.target === $('thanks')) $('thanks').hidden = true; });
   $('thanksshare').addEventListener('click', async () => {
@@ -801,6 +833,66 @@ async function main() {
   refresh();
   if (S.sel >= 0) flyTo(V[S.sel].x, V[S.sel].z);
 
+  // ---------- labels ----------
+  // Neighbourhood names on the ground, and venue names once the camera is close enough to read them.
+  // Same WGS84 to RD approximation as the data build, shifted to the tile origin.
+  const rdXZ = (lat, lon) => {
+    const p = 0.36 * (lat - 52.15517440), l = 0.36 * (lon - 5.38720621);
+    const x = 155000 + 190094.945 * l - 11832.228 * p * l - 114.221 * p * p * l - 32.391 * l ** 3 - 0.705 * p - 2.340 * p ** 3 * l - 0.608 * p * l ** 3 - 0.008 * l * l + 0.148 * p * p * l ** 3;
+    const y = 463000 + 309056.544 * p + 3638.893 * l * l + 73.077 * p * p - 157.984 * p * l * l + 59.788 * p ** 3 + 0.433 * l - 6.439 * p * p * l * l - 0.032 * p * l + 0.092 * l ** 4 - 0.054 * p * l ** 4;
+    return [x - 121390, -(y - 487380)];
+  };
+  const AREAS = [['Centrum', 52.3727, 4.8950], ['Jordaan', 52.3760, 4.8820], ['De Pijp', 52.3540, 4.8950], ['Oud-West', 52.3655, 4.8700],
+    ['Oost', 52.3595, 4.9240], ['Noord', 52.3925, 4.9200], ['NDSM', 52.4010, 4.8920], ['Westerpark', 52.3870, 4.8770],
+    ['Zuid', 52.3480, 4.8700], ['Plantage', 52.3660, 4.9120], ['Eastern Docklands', 52.3735, 4.9410], ['Rivierenbuurt', 52.3445, 4.9030],
+    ['Zuidoost', 52.3115, 4.9480], ['Sloterdijk', 52.3890, 4.8380], ['Bos en Lommer', 52.3790, 4.8500], ['Museumplein', 52.3575, 4.8815],
+    ['Leidseplein', 52.3641, 4.8826], ['Rembrandtplein', 52.3663, 4.8966]];
+  const labLayer = $('labels-layer'), LP = new THREE.Vector3();
+  const mk = (cls, txt) => { const el = document.createElement('div'); el.className = 'lbl ' + cls; if (txt) el.textContent = txt; labLayer.append(el); return el; };
+  const AL = AREAS.map(([n, la, lo]) => { const [x, z] = rdXZ(la, lo); return { x, z, el: mk('area', n) }; });
+  const VL = V.map((v, i) => {
+    const el = mk('ven'); el.append(document.createElement('i'), (n => n.length > 30 ? n.slice(0, 29).trim() + '…' : n)(v.vn[0] || v.n.split(' · ')[0]), document.createElement('b'));
+    el.addEventListener('click', () => select(i, true));
+    return el;
+  });
+  S.labels = store.get('adem-labels') !== '0';
+  $('labelsbtn').setAttribute('aria-pressed', S.labels);
+  function placeLabels() {
+    labLayer.hidden = !S.labels;
+    if (!S.labels) return;
+    const W = canvas.clientWidth, H = canvas.clientHeight, dist = camera.position.distanceTo(controls.target);
+    // Panels count as taken space, so no label hides under them.
+    const boxes = [...document.querySelectorAll('.ui, #badge, #nav')].map(e => e.getBoundingClientRect()).filter(b => b.width && b.height).map(b => [b.left, b.top, b.right, b.bottom]);
+    // Show a label only where it fits on screen and clears the ones already placed.
+    const put = (el, x, y, z, pad) => {
+      LP.set(x, y, z).project(camera);
+      if (LP.z > 1 || Math.abs(LP.x) > 1.05 || Math.abs(LP.y) > 1.05) return false;
+      const sx = (LP.x + 1) / 2 * W, sy = (1 - LP.y) / 2 * H;
+      if (!el._w) { el.style.visibility = 'hidden'; el._w = el.offsetWidth; el._h = el.offsetHeight; }
+      const r = [sx - el._w / 2 - pad, sy - el._h - 6 - pad, sx + el._w / 2 + pad, sy + pad];
+      if (r[0] < 4 || r[1] < 4 || r[2] > W - 4 || r[3] > H - 4 || boxes.some(o => r[0] < o[2] && r[2] > o[0] && r[1] < o[3] && r[3] > o[1])) return false;
+      boxes.push(r);
+      el.style.transform = `translate(${Math.round(sx - el._w / 2)}px,${Math.round(sy - el._h - 6)}px)`;
+      el.style.visibility = 'visible';
+      return true;
+    };
+    for (const el of VL) el.style.visibility = 'hidden';
+    for (const a of AL) a.el.style.visibility = 'hidden';
+    // Busiest venues first: a handful at city scale, more as the camera comes closer.
+    const cap = dist < 2200 ? (mobile() ? 14 : 32) : dist < 6000 ? (mobile() ? 6 : 14) : 0, order = [];
+    V.forEach((v, i) => { if (v.g.visible && (cap || i === S.sel)) order.push(i); });
+    order.sort((a, b) => (b === S.sel) - (a === S.sel) || V[b].c - V[a].c);
+    let shown = 0;
+    for (const i of order) {
+      if (shown >= Math.max(cap, 1)) break;
+      const v = V[i], el = VL[i];
+      if (el._c !== v.c) { el.lastChild.textContent = v.c; el._c = v.c; el._w = 0; }
+      el.classList.toggle('free', v.nf > 0); el.classList.toggle('sel', i === S.sel);
+      if (put(el, v.x, (v.bh || 20) + 4, v.z, 3)) shown++;
+    }
+    for (const a of AL) put(a.el, a.x, 0, a.z, 8);
+  }
+
   // Render only when something moves: camera, flights, tiles rising, or the slow pulse in beam view.
   renderer.setAnimationLoop(() => {
     const now = performance.now();
@@ -832,6 +924,6 @@ async function main() {
       dirty = true;
     }
     controls.update();
-    if (dirty || now < busyUntil) { renderer.render(scene, camera); dirty = false; }
+    if (dirty || now < busyUntil) { renderer.render(scene, camera); placeLabels(); dirty = false; }
   });
 }

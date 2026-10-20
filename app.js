@@ -15,6 +15,8 @@ const DAYL = ['Wednesday 21', 'Thursday 22', 'Friday 23', 'Saturday 24', 'Sunday
 const KINDC = { day: '#EF8055', club: '#B78CEE', art: '#78A8F2', talk: '#DFA63E', well: '#41C0A0' };
 const KINDL = { day: 'Day music', club: 'Club', art: 'Art & film', talk: 'Talk', well: 'Wellbeing' };
 const ADE = 'https://www.amsterdam-dance-event.nl/en/program/2026/';
+const CHGL = { new: 'New in the program', time: 'Time changed', venue: 'Venue changed', sold: 'Just sold out', title: 'Renamed' };
+const chgText = c => c.split(',').map(k => CHGL[k] || k).join(', ') + ' since the last update';
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const hm = m => m < 0 ? '' : String(Math.floor(m / 60) % 24).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
 const fold = s => s.toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '');
@@ -270,7 +272,7 @@ async function main() {
     return gWant;
   };
   const genreOk = e => !S.genres.size || e[12].some(g => genreSet().has(g));
-  const baseOk = (v, e) => inSlot(e) && (!S.free || e[3]) && (!S.hideSold || !e[11]) && genreOk(e) && qMatch(v, e);
+  const baseOk = (v, e) => inSlot(e) && (!S.free || e[3]) && (!S.hideSold || !e[11]) && (!S.chg || e[14]) && genreOk(e) && qMatch(v, e);
   const evFor = v => S.tab === 'plan' ? v.ev.filter(e => plan.has(pid(e))) : v.ev.filter(e => (S.day < 0 || e[0] === S.day) && baseOk(v, e));
 
   // ---------- venue markers ----------
@@ -442,6 +444,15 @@ async function main() {
   $('views').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; S.view = b.dataset.v; store.set('adem-view', S.view); track('view', { view: S.view }); press($('views'), x => x === b); refresh(); });
   $('free').addEventListener('click', () => { S.free = !S.free; store.set('adem-free', S.free ? '1' : '0'); $('free').setAttribute('aria-pressed', S.free); summary(); refresh(); });
   $('labelsbtn').addEventListener('click', () => { S.labels = !S.labels; store.set('adem-labels', S.labels ? '1' : '0'); $('labelsbtn').setAttribute('aria-pressed', S.labels); track('labels', { on: S.labels }); wake(); });
+  // Events whose time, venue or sold-out status changed since the first twice-daily refresh, or that are new.
+  const NCHG = V.reduce((n, v) => n + v.ev.filter(e => e[14]).length, 0);
+  $('chgbtn').hidden = !NCHG; $('chgn').textContent = NCHG ? `(${NCHG})` : '';
+  $('chgbtn').addEventListener('click', () => { S.chg = !S.chg; $('chgbtn').setAttribute('aria-pressed', S.chg); track('changed', { on: S.chg }); refresh(); });
+  // Phones: the fan-made notice shrinks to one line after 5 seconds or on ×, and a tap opens it again.
+  const unoff = $('unoff'), unMini = on => { unoff.classList.toggle('mini', on); wake(); };
+  if (mobile()) setTimeout(() => unMini(true), 5000);
+  $('unclose').addEventListener('click', () => unMini(true));
+  $('unmini').addEventListener('click', () => unMini(false));
   $('nosold').setAttribute('aria-pressed', S.hideSold);
   $('nosold').addEventListener('click', () => { S.hideSold = !S.hideSold; store.set('adem-hidesold', S.hideSold ? '1' : '0'); $('nosold').setAttribute('aria-pressed', S.hideSold); track('hide-sold', { on: S.hideSold }); refresh(); });
   // Genre picker: counts are events across the whole programme, so the list reads the same whatever day is picked.
@@ -533,7 +544,7 @@ async function main() {
   const addBtn = x => { const k = pid(x), on = plan.has(k); return `<button type="button" class="add" data-k="${k}" aria-pressed="${on}" aria-label="${on ? 'Remove from' : 'Add to'} my plan" title="${on ? 'Remove from' : 'Add to'} my plan">${on ? '&#10003;' : '+'}</button>`; };
   const row = (x, v, i, showVenue) => `<div class="item" style="--c:${KINDC[x[4]]}"><div class="t">${when(x)}</div><div>
     <p class="n"><a href="${ADE + x[6]}/" target="_blank" rel="noopener">${esc(x[5])}</a></p>${x[13] ? `<p class="lu">${esc(x[13])}</p>` : ''}
-    <div class="m">${S.day < 0 && S.tab !== 'plan' ? `<span class="dy">${DAYN[x[0]]}</span>` : ''}${x[11] ? `<span class="so">SOLD OUT</span><a class="resale" href="https://www.ticketswap.com/search?query=${encodeURIComponent(x[5])}" target="_blank" rel="noopener">Resale &#8599;</a>` : ''}${freeTag(x)}<span class="k">${KINDL[x[4]]}</span>${showVenue ? `<button type="button" class="vlink" data-i="${i}">${esc(v.vn[x[10]] || v.n)}</button>${v.d ? `<span>${esc(v.d)}</span>` : ''}` : (v.vn.length > 1 ? `<span>${esc(v.vn[x[10]])}</span>` : '')}${x[7] ? '<span class="pick">ADE pick</span>' : ''}</div></div>${addBtn(x)}</div>`;
+    <div class="m">${S.day < 0 && S.tab !== 'plan' ? `<span class="dy">${DAYN[x[0]]}</span>` : ''}${x[14] ? `<span class="upd" title="${esc(chgText(x[14]))}">UPDATED</span>` : ''}${x[11] ? `<span class="so">SOLD OUT</span><a class="resale" href="https://www.ticketswap.com/search?query=${encodeURIComponent(x[5])}" target="_blank" rel="noopener">Resale &#8599;</a>` : ''}${freeTag(x)}<span class="k">${KINDL[x[4]]}</span>${showVenue ? `<button type="button" class="vlink" data-i="${i}">${esc(v.vn[x[10]] || v.n)}</button>${v.d ? `<span>${esc(v.d)}</span>` : ''}` : (v.vn.length > 1 ? `<span>${esc(v.vn[x[10]])}</span>` : '')}${x[7] ? '<span class="pick">ADE pick</span>' : ''}</div></div>${addBtn(x)}</div>`;
   function planItems() {
     const out = [...plan].map(k => KEY.get(k)).filter(Boolean).map(([e, i]) => ({ e, i, v: V[i] }))
       .sort((a, b) => a.e[0] - b.e[0] || a.e[1] - b.e[1]);

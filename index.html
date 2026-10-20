@@ -51,8 +51,12 @@ a{color:var(--ink-2)}
 #bar .unoff .stamp{flex:none;padding:4px 8px;border:2px solid var(--free);color:var(--free);font:400 11px/1.1 "Audiowide","Archivo",sans-serif;letter-spacing:.14em;text-transform:uppercase;text-align:center;transform:rotate(-4deg)}
 #bar .unoff p{margin:0;flex:1 1 220px;min-width:0;display:grid;gap:3px}
 #bar .unoff p b{font:700 13px/1.3 var(--sans);color:var(--ink)}
+#bar .unoff p small{font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;color:var(--ink-3)}
 #bar .unoff p span{font-size:12px;line-height:1.35;color:var(--ink-2)}
 #bar .unoff a{flex:none;height:32px;padding:0 12px;display:inline-flex;align-items:center;gap:7px;border:1px solid var(--ink);color:var(--ink);text-decoration:none;font-family:var(--mono);font-size:10px;font-weight:500;letter-spacing:.14em;text-transform:uppercase}
+.upd{font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:.1em;padding:2px 5px;background:#7CF2D2;color:#06231C}
+#bar .unoff{position:relative}
+#bar .unclose,#bar .unmini{display:none}
 #bar .unoff a:hover{background:var(--ink);color:var(--night)}
 #bar h1 small{font-family:var(--mono);font-weight:500;font-size:9.5px;letter-spacing:.12em;color:var(--free);font-variation-settings:normal}
 .tools{display:flex;gap:6px;flex-shrink:0}
@@ -317,6 +321,13 @@ a{color:var(--ink-2)}
   #beer .bl small,#beer .bf{display:none}
   #beer .bs{display:inline}
   #beer .bl{font-size:10.5px}
+  #bar .unclose{display:block;position:absolute;top:2px;right:2px;width:32px;height:32px;padding:0;border:0;background:transparent;color:var(--ink-3);font:400 20px/1 var(--sans);letter-spacing:0}
+  #bar .unoff p{padding-right:18px}
+  #bar .unoff.mini{padding:0 0 0 0;gap:0;flex-wrap:nowrap;align-items:stretch}
+  #bar .unoff.mini>*{display:none}
+  #bar .unoff.mini .unmini{display:block;flex:1;white-space:nowrap;text-align:left;padding:8px 10px;border:0;background:transparent;font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+  #bar .unoff.mini .unmini b{color:var(--free);font-weight:700}
+  #bar .unoff.mini>a{display:inline-flex;height:auto;border:0;border-left:1px solid var(--rule);padding:0 10px;font-size:9.5px}
   #radiopanel{position:fixed;left:max(8px,env(safe-area-inset-left,0px));right:auto;bottom:calc(var(--sh) + 116px + env(safe-area-inset-bottom,0px));width:calc(100vw - 16px);max-height:calc(100dvh - var(--sh) - 140px);overflow:auto}
   #badge a.rt{padding:5px 8px 5px 6px;font-size:9.5px}
   #badge .hits{display:none}
@@ -332,7 +343,7 @@ a{color:var(--ink-2)}
 <div id="bar" class="ui">
   <div class="title">
     <h1>ADE 2026 by night<small>21 to 25 Oct</small></h1>
-    <div class="unoff"><span class="stamp" aria-hidden="true">Fan<br>made</span><p><b>Unofficial map, not affiliated with ADE</b><span>Times, lineups and sold-out status can change.</span></p><a href="https://www.amsterdam-dance-event.nl/" target="_blank" rel="noopener">Official ADE site <span aria-hidden="true">&#8599;</span></a></div>
+    <div class="unoff" id="unoff"><button class="unclose" id="unclose" type="button" aria-label="Make this notice smaller">&times;</button><button class="unmini" id="unmini" type="button" aria-label="Show the full notice"><b>Unofficial fan map</b> &#9432;</button><span class="stamp" aria-hidden="true">Fan<br>made</span><p><b>Unofficial map, not affiliated with ADE</b><span>Times, lineups and sold-out status can change, so check the official ADE site for the latest.</span><small>Data updated 20 Oct 2026, 14:43 &middot; refreshed twice a day</small></p><a href="https://www.amsterdam-dance-event.nl/" target="_blank" rel="noopener">Official ADE site <span aria-hidden="true">&#8599;</span></a></div>
     <div class="tools">
       <button id="filtertoggle" type="button" aria-expanded="false" aria-controls="filters"><span id="sumtext">Filters</span></button>
       <button id="share" type="button">Share</button>
@@ -341,7 +352,7 @@ a{color:var(--ink-2)}
   </div>
   <div class="filters" id="filters">
     <div class="row"><div class="seg" id="days" role="group" aria-label="Day"></div><button id="free" type="button" aria-pressed="false">Free only</button></div>
-    <div class="row"><button id="genrebtn" class="pill" type="button" aria-pressed="false">Genres <span id="gcount" hidden></span></button><button id="nosold" class="pill" type="button" aria-pressed="false">Hide sold out</button><button id="labelsbtn" class="pill" type="button" aria-pressed="false">Labels</button></div>
+    <div class="row"><button id="genrebtn" class="pill" type="button" aria-pressed="false">Genres <span id="gcount" hidden></span></button><button id="nosold" class="pill" type="button" aria-pressed="false">Hide sold out</button><button id="chgbtn" class="pill" type="button" aria-pressed="false" hidden>Recently changed <span id="chgn"></span></button><button id="labelsbtn" class="pill" type="button" aria-pressed="false">Labels</button></div>
     <div class="row"><div class="seg" id="slots" role="group" aria-label="Time of day"></div><div class="seg small" id="views" role="group" aria-label="Map style"></div></div>
     <div class="legend"><span><i style="background:var(--free)"></i>Free events</span><span><i style="background:var(--paid)"></i>Paid only</span><span class="lg">Bigger glow, more events</span></div>
     <button id="filtersdone" type="button">Show map</button>
@@ -365,7 +376,7 @@ a{color:var(--ink-2)}
   <button id="infoclose" type="button">Close</button>
   <h3>About this map</h3>
   <p id="hint"></p>
-  <p>An unofficial, free fan project. Not affiliated with, endorsed by or connected to Amsterdam Dance Event. For official information, tickets and last-minute changes, always use <a href="https://www.amsterdam-dance-event.nl/" target="_blank" rel="noopener">amsterdam-dance-event.nl</a>. Event data comes from the public ADE program, last pulled 19 October 2026 at 21:00, including which events are sold out. Sold-out events link to a search on TicketSwap, which ADE names as its marketplace partner; check listings there yourself. Times and lineups change, and some events sell out, so always check the event page before you go. ADE publishes no prices, so paid events show none.</p>
+  <p>An unofficial, free fan project. Not affiliated with, endorsed by or connected to Amsterdam Dance Event. For official information, tickets and last-minute changes, always use <a href="https://www.amsterdam-dance-event.nl/" target="_blank" rel="noopener">amsterdam-dance-event.nl</a>. Event data comes from the public ADE program, last updated 20 Oct 2026, 14:43, refreshed twice a day, including which events are sold out. Sold-out events link to a search on TicketSwap, which ADE names as its marketplace partner; check listings there yourself. Times and lineups change, and some events sell out, so always check the event page before you go. ADE publishes no prices, so paid events show none.</p>
   <p class="legal">ADE and Amsterdam Dance Event are names of their owner, used here only to say which event this map covers. Everything is provided as is: listings come from public sources and can be wrong, change or be cancelled, and organisers and venues decide on entry. Your saved plan stays in your browser. Visit counts are anonymous and cookieless (Umami, hits.sh); hits.sh sees your IP address when it shows the counter.</p>
   <p>Late events starting after midnight are listed under the night they belong to (a 02:00 start on Thursday shows under Wednesday, marked Thu).</p>
   <p>Buildings: <a href="https://github.com/alexbarakov/amsterdam-by-building" target="_blank" rel="noopener">Amsterdam, building by building</a> by Alex Barakov (MIT licence), from <a href="https://3dbag.nl" target="_blank" rel="noopener">3D BAG</a> by TU Delft (CC BY 4.0), BAG and BGT (CC0) and Gemeente Amsterdam open data. Addresses geocoded with PDOK. Rendering by three.js.</p>

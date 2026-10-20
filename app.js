@@ -492,7 +492,8 @@ async function main() {
     S.sheet = state;
     document.body.classList.toggle('sheet-peek', state === 'peek');
     document.body.classList.toggle('sheet-full', state === 'full');
-    $('sheetbtn').textContent = state === 'peek' ? 'Show list' : 'Show map';
+    document.body.classList.toggle('sheet-hide', state === 'hide');
+    $('sheetbtn').textContent = state === 'peek' || state === 'hide' ? 'Show list' : 'Show map';
     wake(0.3);
   }
   S.sheet = 'half';
@@ -502,7 +503,29 @@ async function main() {
   if (GUIDE) { $('guidelink').href = GUIDE; $('guidelink').hidden = false; }
   $('infobtn').addEventListener('click', () => { const o = $('info').hidden; $('info').hidden = !o; $('infobtn').setAttribute('aria-expanded', o); });
   $('infoclose').addEventListener('click', () => { $('info').hidden = true; $('infobtn').setAttribute('aria-expanded', false); });
-  $('sheetbtn').addEventListener('click', () => { setFilters(false); setSheet(S.sheet === 'peek' ? 'full' : 'peek'); });
+  $('sheetbtn').addEventListener('click', () => { setFilters(false); setSheet(S.sheet === 'peek' || S.sheet === 'hide' ? 'full' : 'peek'); });
+  // Drag handle on the phone sheet: follow the finger, then snap to the nearest size. A tap steps through the sizes.
+  {
+    const grab = $('grab'), side = $('side');
+    let y0 = 0, h0 = 0, moved = false, id = null;
+    const sizes = () => { const H = innerHeight; return [['hide', 84], ['peek', 168], ['half', H * 0.4], ['full', H * 0.8]]; };
+    grab.addEventListener('pointerdown', e => { id = e.pointerId; grab.setPointerCapture(id); y0 = e.clientY; h0 = side.getBoundingClientRect().height; moved = false; document.body.classList.add('dragging'); });
+    grab.addEventListener('pointermove', e => {
+      if (e.pointerId !== id) return;
+      const dy = y0 - e.clientY;
+      if (Math.abs(dy) > 6) moved = true;
+      if (moved) { document.body.style.setProperty('--sh', Math.max(72, Math.min(innerHeight * 0.85, h0 + dy)) + 'px'); wake(); }
+    });
+    const end = e => {
+      if (e.pointerId !== id) return;
+      id = null; document.body.classList.remove('dragging');
+      const h = side.getBoundingClientRect().height; document.body.style.removeProperty('--sh');
+      if (!moved) return setSheet({ hide: 'peek', peek: 'half', half: 'full', full: 'peek' }[S.sheet] || 'half');
+      setFilters(false);
+      setSheet(sizes().reduce((a, b) => Math.abs(b[1] - h) < Math.abs(a[1] - h) ? b : a)[0]);
+    };
+    grab.addEventListener('pointerup', end); grab.addEventListener('pointercancel', end);
+  }
 
   const head = $('sidehead'), list = $('list'), status = $('status');
   const freeTag = x => x[3] === 1 ? '<span class="free">FREE</span>' : x[3] === 2 ? '<span class="free soft" title="The organiser says free entry">FREE?</span>' : '';

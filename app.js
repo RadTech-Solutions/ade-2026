@@ -448,9 +448,9 @@ async function main() {
   const NCHG = V.reduce((n, v) => n + v.ev.filter(e => e[14]).length, 0);
   $('chgbtn').hidden = !NCHG; $('chgn').textContent = NCHG ? `(${NCHG})` : '';
   $('chgbtn').addEventListener('click', () => { S.chg = !S.chg; $('chgbtn').setAttribute('aria-pressed', S.chg); track('changed', { on: S.chg }); refresh(); });
-  // Phones: the fan-made notice shrinks to one line after 5 seconds or on ×, and a tap opens it again.
+  // Phones: the fan-made notice starts as one line; a tap opens it in full and × shrinks it again.
   const unoff = $('unoff'), unMini = on => { unoff.classList.toggle('mini', on); wake(); };
-  if (mobile()) setTimeout(() => unMini(true), 5000);
+  if (mobile()) unMini(true);
   $('unclose').addEventListener('click', () => unMini(true));
   $('unmini').addEventListener('click', () => unMini(false));
   $('nosold').setAttribute('aria-pressed', S.hideSold);

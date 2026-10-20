@@ -642,10 +642,19 @@ async function main() {
   $('thanksclose').addEventListener('click', () => { $('thanks').hidden = true; });
   // ---------- radio ----------
   // Plays a station's own public stream through one <audio> element. Nothing loads until someone taps a station.
-  const RADIO = [];
+  const RADIO = [
+    { id: 'technolovers-techno', g: 'Techno', n: 'Technolovers Techno', by: 'Technolovers · Germany', url: 'https://stream.technolovers.fm/techno', site: 'https://technolovers.fm/' },
+    { id: 'bassdrive', g: 'Drum & bass', n: 'Bassdrive', by: 'Bassdrive · worldwide', url: 'https://ice.bassdrive.net/stream', site: 'https://www.bassdrive.com/' },
+    { id: 'intense', g: 'Dance', n: 'Intense Radio', by: 'Intense Radio · Netherlands', url: 'https://intenseradio.live-streams.nl:18000/low', site: 'https://www.intenseradio.net/' },
+    { id: 'technolovers-deephouse', g: 'Deep house', n: 'Technolovers Deep House', by: 'Technolovers · Germany', url: 'https://stream.technolovers.fm/deep-house', site: 'https://technolovers.fm/' },
+    { id: 'acidjazz', g: 'Jazz', n: '100% Acid Jazz', by: 'Radio Suite Network · Toronto', url: 'https://mpc1.mediacp.eu:8356/stream', site: 'https://radiosuitenetwork.torontocast.stream/100-acid-jazz/' },
+    { id: 'ahfm', g: 'Trance', n: 'AH.FM', by: 'AH.FM · worldwide', url: 'https://eu.ah.fm/live', site: 'https://ah.fm/' },
+  ];
   const rBtn = $('radio'), rPanel = $('radiopanel'), rList = $('rlist'), rNow = $('rnow'), rStop = $('rstop');
   let audio = null, rCur = -1;
   rBtn.hidden = !RADIO.length;
+  const rSites = [...new Map(RADIO.map(r => [r.by.split(' · ')[0], r.site])).entries()];
+  $('rfine').innerHTML = `Made with &#9829; for the scene, no ads. Live streams courtesy of ${rSites.map(([n, u]) => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(n)}</a>`).join(', ')}, played straight from each station. Go say hi and browse their shows. We don't host or own the music.`;
   rList.innerHTML = RADIO.map((r, i) => `<button type="button" data-r="${i}" aria-pressed="false"><span class="g">${esc(r.g)}</span><span class="n">${esc(r.n)}<small>${esc(r.by)}</small></span><span class="eq" aria-hidden="true"><i></i><i></i><i></i></span></button>`).join('');
   const rSet = (msg, live) => {
     rNow.textContent = msg; rBtn.classList.toggle('on', !!live); rStop.hidden = rCur < 0;
@@ -669,8 +678,8 @@ async function main() {
   }
   rList.addEventListener('click', e => { const b = e.target.closest('button[data-r]'); if (!b) return; +b.dataset.r === rCur ? rOff() : rPlay(+b.dataset.r); });
   rStop.addEventListener('click', rOff);
-  rBtn.addEventListener('click', () => { const open = rPanel.hidden; rPanel.hidden = !open; rBtn.setAttribute('aria-expanded', open); if (open) track('radio-open'); });
-  document.addEventListener('click', e => { if (!rPanel.hidden && !e.target.closest('#radiopanel,#radio')) { rPanel.hidden = true; rBtn.setAttribute('aria-expanded', false); } });
+  rBtn.addEventListener('click', () => { const open = rPanel.hidden; rPanel.hidden = !open; rBtn.setAttribute('aria-expanded', open); $('badge').classList.toggle('rop', open); if (open) track('radio-open'); });
+  document.addEventListener('click', e => { if (!rPanel.hidden && !e.target.closest('#radiopanel,#radio')) { rPanel.hidden = true; rBtn.setAttribute('aria-expanded', false); $('badge').classList.remove('rop'); } });
   $('beer').addEventListener('click', () => { $('thankskick').textContent = 'Enjoying the map?'; $('thanks').hidden = false; $('thanksclose').focus(); track('drink-open'); });
   $('thanks').addEventListener('click', e => { if (e.target === $('thanks')) $('thanks').hidden = true; });
   $('thanksshare').addEventListener('click', async () => {
@@ -862,7 +871,7 @@ async function main() {
     if (!S.labels) return;
     const W = canvas.clientWidth, H = canvas.clientHeight, dist = camera.position.distanceTo(controls.target);
     // Panels count as taken space, so no label hides under them.
-    const boxes = [...document.querySelectorAll('.ui, #badge, #nav')].map(e => e.getBoundingClientRect()).filter(b => b.width && b.height).map(b => [b.left, b.top, b.right, b.bottom]);
+    const boxes = [...document.querySelectorAll('.ui, #badge, #nav, #radio, #beer, #radiopanel:not([hidden])')].map(e => e.getBoundingClientRect()).filter(b => b.width && b.height).map(b => [b.left, b.top, b.right, b.bottom]);
     // Show a label only where it fits on screen and clears the ones already placed.
     const put = (el, x, y, z, pad) => {
       LP.set(x, y, z).project(camera);

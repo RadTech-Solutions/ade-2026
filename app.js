@@ -684,6 +684,12 @@ async function main() {
     { id: 'acidjazz', g: 'Jazz', n: '100% Acid Jazz', by: 'Radio Suite Network · Toronto', url: 'https://mpc1.mediacp.eu:8356/stream', site: 'https://radiosuitenetwork.torontocast.stream/100-acid-jazz/' },
     { id: 'ahfm', g: 'Trance', n: 'AH.FM', by: 'AH.FM · worldwide', url: 'https://eu.ah.fm/live', site: 'https://ah.fm/' },
   ];
+  // DJ sets play in SoundCloud's own widget. Nothing from SoundCloud loads until someone taps a set.
+  const SETS = [
+    { id: 'deepe-hbar55', g: 'House', n: 'Housemix @ hbar55 Frankfurt', by: 'Deepé', track: '2400944964', page: 'https://soundcloud.com/deepe/housemix-hbar55-frankfut-1' },
+    { id: 'deepe-nye-techno', g: 'Techno', n: 'NYE Techno Mix, full set', by: 'Deepé', track: '1705366725', page: 'https://soundcloud.com/deepe/nye-techno-mix-fullset' },
+    { id: 'deepe-raw-techno-02', g: 'Techno', n: 'Raw Techno Sessions 02', by: 'Deepé', track: '2153753553', page: 'https://soundcloud.com/deepe/raw-techno-sessions-02' },
+  ];
   const rBtn = $('radio'), rPanel = $('radiopanel'), rList = $('rlist'), rNow = $('rnow'), rStop = $('rstop');
   let audio = null, rCur = -1;
   rBtn.hidden = !RADIO.length;
@@ -701,6 +707,7 @@ async function main() {
       audio.addEventListener('waiting', () => rCur >= 0 && rSet('Tuning in…', false));
       audio.addEventListener('error', () => { if (rCur >= 0 && audio.getAttribute('src')) rSet(RADIO[rCur].n + ' is off air, try another', false); });
     }
+    if (typeof sOff === 'function' && sCur >= 0) sOff();
     rCur = i; audio.src = RADIO[i].url; rSet('Tuning in…', false);
     audio.play().catch(() => rSet(RADIO[i].n + ' is off air, try another', false));
     store.set('adem-radio', RADIO[i].id); track('radio-play', { station: RADIO[i].id });
@@ -710,9 +717,50 @@ async function main() {
     if (audio) { audio.pause(); audio.removeAttribute('src'); audio.load(); }
     rCur = -1; rSet('Pick a station', false);
   }
+  const sBtn = $('sets'), sPanel = $('setspanel'), sList = $('rsets'), sPlayer = $('rplayer'), sNow = $('snow'), sStop = $('sstop');
+  let sCur = -1, sWidget = null, scApi = null;
+  sBtn.hidden = !SETS.length;
+  const sArtists = [...new Map(SETS.map(x => [x.by, x.page.split('/').slice(0, 4).join('/')])).entries()];
+  $('sfine').innerHTML = `Mixes by ${sArtists.map(([n, u]) => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(n)}</a>`).join(', ')}, played in SoundCloud's own player. Nothing from SoundCloud loads until you tap a set.`;
+  sList.innerHTML = SETS.map((x, i) => `<button type="button" data-s="${i}" aria-pressed="false"><span class="g">${esc(x.g)}</span><span class="n">${esc(x.n)}<small>${esc(x.by)} · SoundCloud</small></span><span class="eq" aria-hidden="true"><i></i><i></i><i></i></span></button>`).join('');
+  const sSet = (msg, live) => {
+    sNow.textContent = msg; sBtn.classList.toggle('on', !!live); sStop.hidden = sCur < 0;
+    sList.querySelectorAll('button').forEach(b => { const on = +b.dataset.s === sCur; b.setAttribute('aria-pressed', on); b.classList.toggle('live', on && !!live); });
+  };
+  // SoundCloud's widget API tells us when a set really plays or pauses; it loads on the first tap only.
+  const loadScApi = () => scApi || (scApi = new Promise((ok, no) => { const t = document.createElement('script'); t.src = 'https://w.soundcloud.com/player/api.js'; t.onload = () => ok(window.SC); t.onerror = no; document.head.appendChild(t); }));
+  function sOff() {
+    sCur = -1; sWidget = null; sPlayer.innerHTML = ''; sPlayer.hidden = true; sSet('With love from friends \u2665', false);
+  }
+  function sPlay(i) {
+    rOff(); sCur = i;
+    const x = SETS[i];
+    const src = 'https://w.soundcloud.com/player/?url=' + encodeURIComponent('https://api.soundcloud.com/tracks/' + x.track) +
+      '&color=%23a98bff&auto_play=true&hide_related=true&show_comments=false&show_user=true&show_reposts=false&show_teaser=false&visual=false';
+    sPlayer.innerHTML = `<iframe title="${esc(x.n)} by ${esc(x.by)} on SoundCloud" allow="autoplay; encrypted-media" src="${src}"></iframe>`;
+    sPlayer.hidden = false; sSet('Loading…', false);
+    const frame = sPlayer.querySelector('iframe');
+    loadScApi().then(SC => {
+      if (sCur !== i || !frame.isConnected) return;
+      const w = sWidget = SC.Widget(frame);
+      w.bind(SC.Widget.Events.PLAY, () => sCur === i && sSet(x.n, true));
+      w.bind(SC.Widget.Events.PAUSE, () => sCur === i && sSet(x.n, false));
+      w.bind(SC.Widget.Events.FINISH, () => sCur === i && sSet(x.n, false));
+    }).catch(() => sSet(x.n, false));
+    track('set-play', { set: x.id });
+  }
+  sList.addEventListener('click', e => { const b = e.target.closest('button[data-s]'); if (!b) return; +b.dataset.s === sCur ? sOff() : sPlay(+b.dataset.s); });
+  sStop.addEventListener('click', sOff);
+  const closePanels = except => {
+    if (except !== 'r') { rPanel.hidden = true; rBtn.setAttribute('aria-expanded', false); }
+    if (except !== 's') { sPanel.hidden = true; sBtn.setAttribute('aria-expanded', false); }
+    $('badge').classList.toggle('rop', !rPanel.hidden || !sPanel.hidden);
+  };
+  sBtn.addEventListener('click', () => { const open = sPanel.hidden; closePanels(open ? 's' : ''); sPanel.hidden = !open; sBtn.setAttribute('aria-expanded', open); $('badge').classList.toggle('rop', open); if (open) track('sets-open'); });
+  document.addEventListener('click', e => { if (!sPanel.hidden && !e.target.closest('#setspanel,#sets')) { sPanel.hidden = true; sBtn.setAttribute('aria-expanded', false); $('badge').classList.toggle('rop', !rPanel.hidden); } });
   rList.addEventListener('click', e => { const b = e.target.closest('button[data-r]'); if (!b) return; +b.dataset.r === rCur ? rOff() : rPlay(+b.dataset.r); });
   rStop.addEventListener('click', rOff);
-  rBtn.addEventListener('click', () => { const open = rPanel.hidden; rPanel.hidden = !open; rBtn.setAttribute('aria-expanded', open); $('badge').classList.toggle('rop', open); if (open) track('radio-open'); });
+  rBtn.addEventListener('click', () => { const open = rPanel.hidden; if (open) closePanels('r'); rPanel.hidden = !open; rBtn.setAttribute('aria-expanded', open); $('badge').classList.toggle('rop', open); if (open) track('radio-open'); });
   document.addEventListener('click', e => { if (!rPanel.hidden && !e.target.closest('#radiopanel,#radio')) { rPanel.hidden = true; rBtn.setAttribute('aria-expanded', false); $('badge').classList.remove('rop'); } });
   $('beer').addEventListener('click', () => { $('thankskick').textContent = 'Enjoying the map?'; $('thanks').hidden = false; $('thanksclose').focus(); track('drink-open'); });
   $('thanks').addEventListener('click', e => { if (e.target === $('thanks')) $('thanks').hidden = true; });

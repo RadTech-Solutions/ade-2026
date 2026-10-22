@@ -952,29 +952,30 @@ async function main() {
     el.addEventListener('click', () => select(i, true));
     return el;
   });
+  let uiBoxes = [], uiAt = -1e9, shownLbl = new Set();
   S.labels = store.get('adem-labels') !== '0';
   $('labelsbtn').setAttribute('aria-pressed', S.labels);
   function placeLabels() {
     labLayer.hidden = !S.labels;
     if (!S.labels) return;
-    const W = canvas.clientWidth, H = canvas.clientHeight, dist = camera.position.distanceTo(controls.target);
-    // Panels count as taken space, so no label hides under them.
-    const boxes = [...document.querySelectorAll('.ui, #badge, #nav, #radio, #beer, #radiopanel:not([hidden])')].map(e => e.getBoundingClientRect()).filter(b => b.width && b.height).map(b => [b.left, b.top, b.right, b.bottom]);
+    const W = canvas.clientWidth, H = canvas.clientHeight, dist = camera.position.distanceTo(controls.target), now = performance.now();
+    // Panels count as taken space, so no label hides under them. Reading their boxes forces a layout, so it happens at most a few times a second.
+    if (now - uiAt > 400) { uiAt = now; uiBoxes = [...document.querySelectorAll('.ui, #badge, #nav, #radio, #beer, #radiopanel:not([hidden])')].map(e => e.getBoundingClientRect()).filter(b => b.width && b.height).map(b => [b.left, b.top, b.right, b.bottom]); }
+    const boxes = uiBoxes.slice(), want = new Set();
     // Show a label only where it fits on screen and clears the ones already placed.
     const put = (el, x, y, z, pad) => {
       LP.set(x, y, z).project(camera);
       if (LP.z > 1 || Math.abs(LP.x) > 1.05 || Math.abs(LP.y) > 1.05) return false;
       const sx = (LP.x + 1) / 2 * W, sy = (1 - LP.y) / 2 * H;
-      if (!el._w) { el.style.visibility = 'hidden'; el._w = el.offsetWidth; el._h = el.offsetHeight; }
+      if (!el._w) { el._w = el.offsetWidth; el._h = el.offsetHeight; }
       const r = [sx - el._w / 2 - pad, sy - el._h - 6 - pad, sx + el._w / 2 + pad, sy + pad];
       if (r[0] < 4 || r[1] < 4 || r[2] > W - 4 || r[3] > H - 4 || boxes.some(o => r[0] < o[2] && r[2] > o[0] && r[1] < o[3] && r[3] > o[1])) return false;
       boxes.push(r);
-      el.style.transform = `translate(${Math.round(sx - el._w / 2)}px,${Math.round(sy - el._h - 6)}px)`;
-      el.style.visibility = 'visible';
+      const tf = `translate(${Math.round(sx - el._w / 2)}px,${Math.round(sy - el._h - 6)}px)`;
+      if (el._tf !== tf) { el.style.transform = tf; el._tf = tf; }
+      want.add(el);
       return true;
     };
-    for (const el of VL) el.style.visibility = 'hidden';
-    for (const a of AL) a.el.style.visibility = 'hidden';
     // Busiest venues first: a handful at city scale, more as the camera comes closer.
     const cap = dist < 2200 ? (mobile() ? 14 : 32) : dist < 6000 ? (mobile() ? 6 : 14) : 0, order = [];
     V.forEach((v, i) => { if (v.g.visible && (cap || i === S.sel)) order.push(i); });
@@ -988,6 +989,10 @@ async function main() {
       if (put(el, v.x, (v.bh || 20) + 4, v.z, 3)) shown++;
     }
     for (const a of AL) put(a.el, a.x, 0, a.z, 8);
+    // Touch only the labels whose visibility changed, so a moving map does not restyle every label each frame.
+    for (const el of shownLbl) if (!want.has(el)) el.style.visibility = 'hidden';
+    for (const el of want) if (!shownLbl.has(el)) el.style.visibility = 'visible';
+    shownLbl = want;
   }
 
   // Render only when something moves: camera, flights, tiles rising, or the slow pulse in beam view.

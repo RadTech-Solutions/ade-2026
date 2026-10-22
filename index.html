@@ -54,6 +54,7 @@ a{color:var(--ink-2)}
 #bar .unoff p small{font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;color:var(--ink-3)}
 #bar .unoff p span{font-size:12px;line-height:1.35;color:var(--ink-2)}
 #bar .unoff a{flex:none;height:32px;padding:0 12px;display:inline-flex;align-items:center;gap:7px;border:1px solid var(--ink);color:var(--ink);text-decoration:none;font-family:var(--mono);font-size:10px;font-weight:500;letter-spacing:.14em;text-transform:uppercase}
+.fringe{font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:.08em;padding:2px 5px;border:1px solid #FF6BB5;color:#FF6BB5}
 .upd{font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:.1em;padding:2px 5px;background:#7CF2D2;color:#06231C}
 #bar .unoff{position:relative}
 #bar .unclose,#bar .unmini{display:none}
@@ -214,7 +215,7 @@ a{color:var(--ink-2)}
 #infoclose{float:right;padding:5px 8px;border:1px solid var(--rule);background:transparent}
 #badge.rop{z-index:9}
 #badge{position:fixed;z-index:5;left:max(12px,env(safe-area-inset-left,0px));bottom:calc(14px + env(safe-area-inset-bottom,0px));display:flex;align-items:center;gap:8px}
-@media (min-width:821px) and (max-width:1280px){#nav{bottom:calc(64px + env(safe-area-inset-bottom,0px))}}
+@media (min-width:821px) and (max-width:1760px){body #nav{bottom:calc(64px + env(safe-area-inset-bottom,0px))}}
 #badge a.rt{display:inline-flex;align-items:center;gap:8px;padding:6px 10px 6px 7px;background:var(--panel);border:1px solid var(--rule);font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;color:var(--ink-2);text-decoration:none}
 #badge a.rt b{color:var(--ink);font-weight:700}
 #badge a.rt .heart{color:#FF6B7A}
@@ -289,12 +290,12 @@ a{color:var(--ink-2)}
 #radiopanel .rfine a,
 #setspanel .rfine a{color:var(--ink-2)}
 @media (prefers-reduced-motion:reduce){.eq i{animation:none;height:70%}#radio.on .woof,#sets.on .woof,#radio:before,#sets:before{animation:none}}
-#beer{height:40px;width:40px;justify-content:center;padding:0;border:0;background:linear-gradient(90deg,#FFCB4D,#FF8A5B 60%,#FF6BB5);display:flex;align-items:center;gap:8px;letter-spacing:0;text-transform:none;color:#14100A;box-shadow:0 0 16px rgba(255,138,91,.3)}
+#beer{height:40px;padding:0 14px 0 9px;border:0;background:linear-gradient(90deg,#FFCB4D,#FF8A5B 60%,#FF6BB5);display:flex;align-items:center;gap:8px;letter-spacing:0;text-transform:none;color:#14100A;box-shadow:0 0 16px rgba(255,138,91,.3)}
 #beer svg{width:22px;height:26px;flex:none;transform-origin:50% 90%;animation:cheers 3.2s ease-in-out infinite}
 #beer .bl{display:grid;gap:3px;text-align:left;font:400 12px/1 "Audiowide","Archivo",sans-serif;letter-spacing:.07em;text-transform:uppercase}
 #beer .bl small{font:700 8.5px/1 var(--mono);letter-spacing:.16em;text-transform:none;color:#3A2410}
 #beer .bs{display:none}
-#beer .bl{display:none!important}
+#beer .bl small{display:none}
 #beer:hover{box-shadow:0 0 24px rgba(255,138,91,.55)}
 #beer:hover svg{animation-duration:.9s}
 @keyframes cheers{0%,72%,100%{transform:rotate(0)}78%{transform:rotate(-14deg)}86%{transform:rotate(10deg)}93%{transform:rotate(-4deg)}}
@@ -347,9 +348,8 @@ a{color:var(--ink-2)}
   #radio{left:max(8px,env(safe-area-inset-left,0px))}
   #radio.on .eq,#sets.on .eq{display:none}
   #sets{left:calc(max(8px,env(safe-area-inset-left,0px)) + 108px)}#beer{left:calc(max(8px,env(safe-area-inset-left,0px)) + 234px);padding:0}
-  #beer .bl small,#beer .bf{display:none}
-  #beer .bs{display:inline}
-  #beer .bl{font-size:10.5px}
+  #beer{width:40px;justify-content:center}
+  #beer .bl{display:none}
   #bar .unclose{display:block;position:absolute;top:2px;right:2px;width:32px;height:32px;padding:0;border:0;background:transparent;color:var(--ink-3);font:400 20px/1 var(--sans);letter-spacing:0}
   #bar .unoff p{padding-right:18px}
   #bar .unoff.mini{padding:0 0 0 0;gap:0;flex-wrap:nowrap;align-items:stretch}
@@ -388,7 +388,7 @@ a{color:var(--ink-2)}
   </div>
   <div class="filters" id="filters">
     <div class="row"><div class="seg" id="days" role="group" aria-label="Day"></div><button id="free" type="button" aria-pressed="false">Free only</button></div>
-    <div class="row"><button id="genrebtn" class="pill" type="button" aria-pressed="false">Genres <span id="gcount" hidden></span></button><button id="nosold" class="pill" type="button" aria-pressed="false">Hide sold out</button><button id="chgbtn" class="pill" type="button" aria-pressed="false" hidden>Recently changed <span id="chgn"></span></button><button id="labelsbtn" class="pill" type="button" aria-pressed="false">Labels</button></div>
+    <div class="row"><button id="genrebtn" class="pill" type="button" aria-pressed="false">Genres <span id="gcount" hidden></span></button><button id="nosold" class="pill" type="button" aria-pressed="false">Hide sold out</button><button id="fringebtn" class="pill" type="button" aria-pressed="false" hidden>Fringe &amp; pop-ups <span id="frn"></span></button><button id="chgbtn" class="pill" type="button" aria-pressed="false" hidden>Recently changed <span id="chgn"></span></button><button id="labelsbtn" class="pill" type="button" aria-pressed="false">Labels</button></div>
     <div class="row"><div class="seg" id="slots" role="group" aria-label="Time of day"></div><div class="seg small" id="views" role="group" aria-label="Map style"></div></div>
     <div class="legend"><span><i style="background:var(--free)"></i>Free events</span><span><i style="background:var(--paid)"></i>Paid only</span><span class="lg">Bigger glow, more events</span></div>
     <button id="filtersdone" type="button">Show map</button>

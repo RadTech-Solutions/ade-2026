@@ -13,7 +13,7 @@ const FREE = new THREE.Color('#FFCB4D'), PAID = new THREE.Color('#5EC8F2');
 const DAYN = ['Wed 21', 'Thu 22', 'Fri 23', 'Sat 24', 'Sun 25'];
 const DAYL = ['Wednesday 21', 'Thursday 22', 'Friday 23', 'Saturday 24', 'Sunday 25'];
 const KINDC = { day: '#EF8055', club: '#B78CEE', art: '#78A8F2', talk: '#DFA63E', well: '#41C0A0' };
-const KINDL = { day: 'Day music', club: 'Club', art: 'Art & film', talk: 'Talk', well: 'Wellbeing' };
+const KINDL = { day: 'Day music', club: 'Club', art: 'Art & film', talk: 'Talk', well: 'Wellbeing', shop: 'Pop-up' };
 const ADE = 'https://www.amsterdam-dance-event.nl/en/program/2026/';
 const CHGL = { new: 'New in the program', time: 'Time changed', venue: 'Venue changed', sold: 'Just sold out', title: 'Renamed' };
 const chgText = c => c.split(',').map(k => CHGL[k] || k).join(', ') + ' since the last update';
@@ -272,7 +272,7 @@ async function main() {
     return gWant;
   };
   const genreOk = e => !S.genres.size || e[12].some(g => genreSet().has(g));
-  const baseOk = (v, e) => inSlot(e) && (!S.free || e[3]) && (!S.hideSold || !e[11]) && (!S.chg || e[14]) && genreOk(e) && qMatch(v, e);
+  const baseOk = (v, e) => inSlot(e) && (!S.free || e[3]) && (!S.hideSold || !e[11]) && (!S.chg || e[14]) && (!S.fringe || e[15]) && genreOk(e) && qMatch(v, e);
   const evFor = v => S.tab === 'plan' ? v.ev.filter(e => plan.has(pid(e))) : v.ev.filter(e => (S.day < 0 || e[0] === S.day) && baseOk(v, e));
 
   // ---------- venue markers ----------
@@ -453,6 +453,10 @@ async function main() {
   if (mobile()) unMini(true);
   $('unclose').addEventListener('click', () => unMini(true));
   $('unmini').addEventListener('click', () => unMini(false));
+  // Pop-ups and fringe nights from outside the ADE program, tagged NOT ADE.
+  const NFR = V.reduce((n, v) => n + v.ev.filter(e => e[15]).length, 0);
+  $('fringebtn').hidden = !NFR; $('frn').textContent = NFR ? `(${NFR})` : '';
+  $('fringebtn').addEventListener('click', () => { S.fringe = !S.fringe; $('fringebtn').setAttribute('aria-pressed', S.fringe); track('fringe', { on: S.fringe }); refresh(); });
   $('nosold').setAttribute('aria-pressed', S.hideSold);
   $('nosold').addEventListener('click', () => { S.hideSold = !S.hideSold; store.set('adem-hidesold', S.hideSold ? '1' : '0'); $('nosold').setAttribute('aria-pressed', S.hideSold); track('hide-sold', { on: S.hideSold }); refresh(); });
   // Genre picker: counts are events across the whole programme, so the list reads the same whatever day is picked.
@@ -543,8 +547,8 @@ async function main() {
   const when = x => `${hm(x[1])}${x[1] >= 1440 ? `<small class="nx">${DAYN[x[0] + 1] ? DAYN[x[0] + 1].slice(0, 3) : 'Mon'}</small>` : ''}<small>${x[2] ? 'to ' + x[2] : ''}</small>`;
   const addBtn = x => { const k = pid(x), on = plan.has(k); return `<button type="button" class="add" data-k="${k}" aria-pressed="${on}" aria-label="${on ? 'Remove from' : 'Add to'} my plan" title="${on ? 'Remove from' : 'Add to'} my plan">${on ? '&#10003;' : '+'}</button>`; };
   const row = (x, v, i, showVenue) => `<div class="item" style="--c:${KINDC[x[4]]}"><div class="t">${when(x)}</div><div>
-    <p class="n"><a href="${ADE + x[6]}/" target="_blank" rel="noopener">${esc(x[5])}</a></p>${x[13] ? `<p class="lu">${esc(x[13])}</p>` : ''}
-    <div class="m">${S.day < 0 && S.tab !== 'plan' ? `<span class="dy">${DAYN[x[0]]}</span>` : ''}${x[14] ? `<span class="upd" title="${esc(chgText(x[14]))}">UPDATED</span>` : ''}${x[11] ? `<span class="so">SOLD OUT</span><a class="resale" href="https://www.ticketswap.com/search?query=${encodeURIComponent(x[5])}" target="_blank" rel="noopener">Resale &#8599;</a>` : ''}${freeTag(x)}<span class="k">${KINDL[x[4]]}</span>${showVenue ? `<button type="button" class="vlink" data-i="${i}">${esc(v.vn[x[10]] || v.n)}</button>${v.d ? `<span>${esc(v.d)}</span>` : ''}` : (v.vn.length > 1 ? `<span>${esc(v.vn[x[10]])}</span>` : '')}${x[7] ? '<span class="pick">ADE pick</span>' : ''}</div></div>${addBtn(x)}</div>`;
+    <p class="n"><a href="${x[15] ? x[6] : ADE + x[6] + '/'}" target="_blank" rel="noopener">${esc(x[5])}</a></p>${x[13] ? `<p class="lu">${esc(x[13])}</p>` : ''}
+    <div class="m">${S.day < 0 && S.tab !== 'plan' ? `<span class="dy">${DAYN[x[0]]}</span>` : ''}${x[15] ? `<span class="fringe" title="Not in the ADE program. Found on ${esc(x[15])}; check there before you go.">NOT ADE &middot; ${esc(x[15])}</span>` : ''}${x[14] ? `<span class="upd" title="${esc(chgText(x[14]))}">UPDATED</span>` : ''}${x[11] ? `<span class="so">SOLD OUT</span><a class="resale" href="https://www.ticketswap.com/search?query=${encodeURIComponent(x[5])}" target="_blank" rel="noopener">Resale &#8599;</a>` : ''}${freeTag(x)}<span class="k">${KINDL[x[4]]}</span>${showVenue ? `<button type="button" class="vlink" data-i="${i}">${esc(v.vn[x[10]] || v.n)}</button>${v.d ? `<span>${esc(v.d)}</span>` : ''}` : (v.vn.length > 1 ? `<span>${esc(v.vn[x[10]])}</span>` : '')}${x[7] ? '<span class="pick">ADE pick</span>' : ''}</div></div>${addBtn(x)}</div>`;
   function planItems() {
     const out = [...plan].map(k => KEY.get(k)).filter(Boolean).map(([e, i]) => ({ e, i, v: V[i] }))
       .sort((a, b) => a.e[0] - b.e[0] || a.e[1] - b.e[1]);
